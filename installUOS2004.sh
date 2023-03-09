@@ -5,7 +5,7 @@
 # make OS release file
 lsb_release -a > ~/OS_ver.txt 2> /dev/null
 
-# connect to wifi
+# connect to wifi on GalaxyS20FE
 nmcli dev wifi connect GalaxyS20FE password 'wifi221255#'
 
 # install NoMachine
