@@ -48,6 +48,16 @@ pip3 install opencv-python
 echo "orangepi" | sudo -S apt -y install git-all
 echo "orangepi" | sudo -S apt clean
 
+# install soft for virtual environment
+echo "orangepi" | sudo -S pip3 install --user virtualenv virtualenvwrapper
+echo "# virtual environment variables" >> ~/.bashrc
+echo "export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3" >> ~/.bashrc
+echo "source ~/.local/bin/virtualenvwrapper.sh" >> ~/.bashrc
+
+# install comand line for Geany
+echo "orangepi" | sudo -S sudo apt -y install libvte-dev
+
+
 # delete firefox browser
 #echo "orangepi" | sudo -S apt -y purge firefox;
 #                          apt autoremove;
