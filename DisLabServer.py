@@ -2,10 +2,17 @@ import os.path
 import socket
 import threading
 
-#Установка адреса и порта для сервера, биндинг
-host = socket.gethostbyname(socket.gethostname())  # заменить на Айпи
+#Reading configs
+with open("serverconfig.conf", "r") as f:
+    lines = f.readlines()
+    ipaddress = lines[0]
+    ipaddress = ipaddress.replace("\r", "")
+    ipaddress = ipaddress.replace("\n", "")
+#Setting adress and port for a server
+host = ipaddress
 port = 5000
 ADDRESS = (host, port)
+eqflag = False
 serversocket = socket.socket()
 serversocket.bind(ADDRESS)
 HEADER = 65
@@ -17,9 +24,14 @@ print("-=DisLab Server Active=-")
 def connector():
     serversocket.listen()
     while True:
+        eqflag = False
         connect, address = serversocket.accept()
-        client_list.append((connect, address))
-        print(f"New client: {connect}")
+        for i in range(len(client_list)):
+            if client_list[i][1][0] == address:
+                eqflag = True
+        if eqflag == False:
+            client_list.append((connect, address))
+        print(f"  \r\n >>New client: {address}")
         thread = threading.Thread(target=disLabServer, args=(connect, address))
         thread.start()
         print(f"Clients: {threading.active_count() - 2}")
@@ -57,6 +69,7 @@ def DB_IMMITATE():
                 if end_c != "Y":
                     break
         end = input("Proceed? Y/N")
+        print("Client list : ")
         if end != "Y":
             break
 

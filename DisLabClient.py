@@ -1,5 +1,5 @@
 import os.path
-import cv2 #https://opencv.org/
+import cv2
 import numpy
 import sys
 import time
@@ -8,8 +8,8 @@ import socket
 
 
 def video_writer(name, timer):
-    #capturing the camera 
-    vc = cv2.VideoCapture("/dev/video1")
+    #capturing the camera
+    vc = cv2.VideoCapture(0)
     #Error if capture failed
     if not vc.isOpened():
         print("Can`t capture the webcam")
@@ -40,10 +40,10 @@ def video_writer(name, timer):
 
 def disLabClient(serverip):
     BUFFER = 4096
-#Указываем порт и сокет сервера
-    host = socket.gethostname() #Временно локальный сервер
+#Port and socket
+    host = serverip
     port = 5000
-#Создаем объект сокета и передаём ему сокет и порт
+#Creating socket, binding with port
     clientsocket = socket.socket()
     print(f"Connecting with : {host} : {port}")
     clientsocket.connect((host, port))
@@ -51,13 +51,13 @@ def disLabClient(serverip):
     flag = True
     while flag:
         data = clientsocket.recv(1024).decode()
-        #Здесь будет блок обработки данных с сервера, предположительно ИД и время
+        #TEMPR! Data procceding block
         data = data.split("_")
-        #Пишем видео заданного времени
+        #Start writing the video with set up lenth
         fln = video_writer(data[0], float(data[1]))
-        #Отправляем имя на сервер
+        #Sending NAME back to server
         clientsocket.send(os.path.basename(fln).encode())
-        #Отправка файла на сервер
+        #Sebding video to the server
         print("Video has been recorded, sending to server...")
         fsize = os.path.getsize(fln)
         with open(fln, "rb") as bfile:
@@ -72,4 +72,6 @@ def disLabClient(serverip):
 with open("clientconfig.conf", "r") as f:
     lines = f.readlines()
     ipaddress = lines[0]
+    ipaddress = ipaddress.replace("\r", "")
+    ipaddress = ipaddress.replace("\n", "")
 disLabClient(ipaddress)
