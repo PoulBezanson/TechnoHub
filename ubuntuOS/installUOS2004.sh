@@ -65,3 +65,5 @@ echo "orangepi" | sudo -S sudo apt -y install libvte-dev
 # install chromium browser
 #echo "orangepi" | sudo -S apt -y install chromium-browser;
 #echo "orangepi" | sudo -S apt clean
+
+

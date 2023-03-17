@@ -1,0 +1,30 @@
+ИНСТРУКЦИИ ПО РАБОТЕ С ОС Ubuntu 20.04
+
+Создание образа EMMC памяти OrangePi 3 LTE
+1. Запустить OrangePi c micro SD.
+2. Вставить в OrangePi usb диск отформатированный в NTFS 
+и имеющий объем свободной памяти не меньший размер, чем 
+размер EMMC.
+3. Отобразить список блоковых устройств:
+$ lsblk
+4. Найти обозначение устройства EMMC, например - mmcblc2
+5. Найти обозначение устройства usb, например - sda
+6. Найти точку монтирования раздела устройства usb:
+$ mount | grep sda
+Например: /dev/sda1 on /media/orangepi/MASTERCARD
+7. Создать образ EMMC памяти на usb устройстве:
+$ sudo dd if=/dev/mmcblk2 of=/media/orangepi/MASTERCARD/2023-03-15-emmc-uos-20-04.img bs=1M status=progress conv=fsync
+
+Запись образа на EMMC
+1. Запустить OrangePi c micro SD.
+2. Вставить в OrangePi usb диск c образом EMMC.
+3. Отобразить список блоковых устройств:
+$ lsblk
+4. Найти обозначение устройства EMMC, например - mmcblc2
+5. Найти обозначение устройства usb, например - sda
+6. Найти точку монтирования раздела устройства usb:
+$ mount | grep sda
+Например: /dev/sda1 on /media/orangepi/MASTERCARD
+7. Записать образ EMMC памяти на usb устройство:
+$ sudo dd if=/media/orangepi/MASTERCARD/2023-03-15-emmc-uos-20-04.img of=/dev/mmcblk2  bs=1M status=progress conv=fsync 
+
