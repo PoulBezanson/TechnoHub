@@ -50,28 +50,36 @@ def disLabClient(serverip):
     print("Connection established...")
     flag = True
     while flag:
+        print("Ready to receive time and index")
         data = clientsocket.recv(1024).decode()
         #TEMPR! Data procceding block
         data = data.split("_")
+        print(f"Index is {data[0]} with time of {data[1]} seconds, recording the video...")
         #Start writing the video with set up lenth
         fln = video_writer(data[0], float(data[1]))
-        #Sending NAME back to server
+        # Sending NAME back to server
+        print(f"Sending back filename : {os.path.basename(fln)}")
         clientsocket.send(os.path.basename(fln).encode())
+        clientsocket.send(str(os.path.getsize(fln)).encode())
         #Sebding video to the server
-        print("Video has been recorded, sending to server...")
-        fsize = os.path.getsize(fln)
+        print("Sending video to server...")
         with open(fln, "rb") as bfile:
             while True:
                 bytes_read = bfile.read(BUFFER)
                 if not bytes_read:
                      bfile.close()
+                     print("File send: success!")
                      break
-                clientsocket.sendall(bytes_read)
-        print("File send: success!")
+                else:
+                    clientsocket.sendall(bytes_read)
+
+
 
 with open("clientconfig.conf", "r") as f:
     lines = f.readlines()
     ipaddress = lines[0]
     ipaddress = ipaddress.replace("\r", "")
     ipaddress = ipaddress.replace("\n", "")
+
+
 disLabClient(ipaddress)
