@@ -29,3 +29,9 @@ $ git add -A
 $ git commit -m "ваше сообщение"
 15. Отправить локальный репозиторий на хост github.com:
 $ git push
+
+Конфигурация Git
+$ git config user.name - вывод имени разработчика
+$ git config user.name "Артем Ш." - установка имени разработчика
+$ git config user.email - вывод e-mail разработчика
+$ git config user.email  ifireice@example.com - установка e-mail разработчика

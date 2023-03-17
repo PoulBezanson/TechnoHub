@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  OpcServer.py
+#  File name: OpcServer.py
+#  Virtual Environment: envOpcServer
 #  Author: Poul Bezanson
 
 def main(args):
