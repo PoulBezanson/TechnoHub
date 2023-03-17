@@ -1,0 +1,7 @@
+Работа с виртуальной средой virtualenv
+$ pip3 freeze > envProject.txt - сохранение параметров виртуальной среды
+
+Работа с менеджером пакетов pip3
+$ pip3 list - список установленных пакетов
+$ pip3 freeze - список установленных пакетов
+$ pip3 uninstall PackageName - удаление пакета PackageName
