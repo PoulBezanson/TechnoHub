@@ -1,0 +1,6 @@
+Welcome to MinimalModbus’ documentation!
+https://minimalmodbus.readthedocs.io/en/master/index.html
+
+How to read register of digital counter with minimalmodbus
+https://stackoverflow-com.translate.goog/questions/67913346/how-to-read-register-of-digital-counter-with-minimalmodbus?_x_tr_sl=auto&_x_tr_tl=en&_x_tr_hl=ru
+
