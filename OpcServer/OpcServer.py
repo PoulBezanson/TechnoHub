@@ -21,6 +21,7 @@ instrument.clear_buffers_before_each_transaction = True
 
 ## Read temperature (PV = ProcessValue) ##
 
+
 CO2_value=instrument.read_register(0, 0, 4)  # Registernumber, number of decimals
 TVOC_value=instrument.read_register(1, 2, 4)
 PM1_0_value=instrument.read_register(2, 0, 4)
@@ -28,6 +29,8 @@ PM2_5_value=instrument.read_register(3, 0, 4)
 PM10_value=instrument.read_register(4, 0, 4)
 Temperature_value=instrument.read_register(5, 1, 4)
 Humidity_value=instrument.read_register(6, 1, 4)
+
+print (__name__)
 
 print('CO2 value = ', CO2_value)
 print('TVOC value = ', TVOC_value)
