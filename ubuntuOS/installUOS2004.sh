@@ -55,8 +55,10 @@ echo "export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3" >> ~/.bashrc
 echo "source ~/.local/bin/virtualenvwrapper.sh" >> ~/.bashrc
 
 # install comand line for Geany
-echo "orangepi" | sudo -S sudo apt -y install libvte-dev
+echo "orangepi" | sudo -S apt -y install libvte-dev
 
+# install network tracer
+echo "orangepi" | sudo -S apt install -y traceroute
 
 # delete firefox browser
 #echo "orangepi" | sudo -S apt -y purge firefox;
