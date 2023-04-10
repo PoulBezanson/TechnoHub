@@ -13,3 +13,7 @@ https://digitology.tech/posts/funktsii-taiminga-python-tri-sposoba-kontrolirovat
 #python#pandas
 Pandas Add Row To DataFrame – Definitive Guide
 https://www.stackvidhya.com/add-row-to-dataframe/
+
+#python#tread
+Возвращение значений из потока
+https://superfastpython.com/thread-return-values/
