@@ -19,6 +19,8 @@ import numpy as np
 import sys
 import os
 import mysql.connector
+import socket
+import subprocess
 import cv2 # https://docs.opencv.org/4.7.0/
 flag_read_data=threading.Event() # флаг управления чтением вектора данных с устройства
 flag_read_data_series=threading.Event() # флаг управления чтением временного ряда векторов данных с устройства
@@ -31,7 +33,7 @@ class Device_1:
 		'''
 		Конструктор
 		'''
-	# параметры соединения с устройством modbus для connect_to_device()
+		# параметры соединения с устройством modbus для connect_to_device()
 		self.device_name='d1'
 		self.port_name='/dev/ttyUSB0'
 		self.slave_address=100
@@ -40,16 +42,16 @@ class Device_1:
 		self.stop_bits = 1
 		self.time_out=0.1
 		self.connection_device=None # экземпляр класса устройства modbus
-	# параметры начальной инициализации устройства для set_initial_state()
+		# параметры начальной инициализации устройства для set_initial_state()
 		self.init_state =	{"mute_state": 0,
 							"unit_state": 1}
 		self.ready_state = {"backlight_state":2}
 		self.ready_time=10 # предельная длительность инициализации начального состояния (сек.)
-	# параметры эксперимента
+		# параметры эксперимента
 		self.d_time=1 		# время дискретизации измеряемого процесса (сек.) 
-		self.full_time=2 	# длительность эксперимента (сек.)
+		self.full_time=5 	# длительность эксперимента (сек.)
 		self.data={"time_start": None,
-					"time_finish": None,
+					"time_reading": None,
 					"co2": None,
 					"tvoc": None,
 					"pm1_0": None,
@@ -58,25 +60,43 @@ class Device_1:
 					"temperature": None,
 					"humidity": None}
 		self.parameters={"id_experiment": None,
+						 "id_user": None,
+						 "publicity": None,
 						 "time_start": None,
 						 "time_finish": None,
 						 "mute_state": None,
 						 "unit_state": None}
 		self.data_series=[]
-	# параметры базы данных
+		# параметры базы данных
+		
+		'''
 		self.db_config={"host":"192.168.0.113",
 						"user":"orangepi",
 						"password":"orangepi",
 						"database":"technohub"}
+		'''
+		self.db_config={"host":"192.168.0.110",
+						"user":"orangepi",
+						"password":"mariadb",
+						"database":"technohub"}
+		
+		
 		self.connection_database=None
-	# парметры вэб-камеры	
-		self.temp_videofile_name="captured.avi" # временное имя видео файла
+		# парметры вэб-камеры	
+		self.temp_videofile_name="captured" # временное имя видео файла
+		self.videofile_extension="mp4" # временное имя видео файла
+		self.videofile_codec="mp4v"
 		self.videofile_name=None
 		self.webcam_fps=23.0
 		self.webcam_size=(640, 480)
 		self.webcam=None # экземпляр класса вэб камеры
 		self.webcam_out=None # экземпляр выходного видео файла
-		
+		# параметры соединения с сервером
+		self.host_config={"host":"192.168.0.110",
+							"user":"administrator",
+							"password":"~/.ssh/id_rsa",
+							"destination":"/var/www/technohub/EXPERIMENT/VIDEO/"}
+			
 	def connect_to_device(self):
 		'''
 		Инициализировать связь с устройством. 
@@ -104,10 +124,10 @@ class Device_1:
 		flag_read_data.set()
 		self.__read_data()
 		flag_read_data.clear()
-		s_time=self.data_series[0][1]-self.data_series[0][0]
-		print(f"[OK!] get_reading_speed(): The sensor polling time was (seconds) - {s_time:.6f}")
+		time_reading=self.data_series[0][1]
+		print(f"[OK!] get_reading_speed(): The sensor polling time was (seconds) - {time_reading:.6f}")
 		self.data_series.pop()
-		return s_time
+		return time_reading
 	
 	def set_initial_state(self):
 		'''
@@ -132,7 +152,6 @@ class Device_1:
 			time.sleep(1)
 			t=t+1
 		print(f"[FAULT!] set_initial_state(): Device initialization problem")
-		sys.exit()
 		return 0
 	
 	def __read_data(self):
@@ -148,8 +167,8 @@ class Device_1:
 		pm10=self.connection_device.read_register(registeraddress=4, number_of_decimals=0, functioncode=4)
 		temperature=self.connection_device.read_register(registeraddress=5, number_of_decimals=1, functioncode=4)
 		humidity=self.connection_device.read_register(registeraddress=6, number_of_decimals=1, functioncode=4)
-		time_finish=dt.datetime.now().timestamp()
-		self.data_series.append([time_start, time_finish, co2, tvoc, pm1_0, pm2_5, pm10, temperature, humidity])
+		time_reading=dt.datetime.now().timestamp()-time_start
+		self.data_series.append([time_start, time_reading, co2, tvoc, pm1_0, pm2_5, pm10, temperature, humidity])
 		flag_read_data.clear()
 	
 	def read_data_series(self):
@@ -174,7 +193,7 @@ class Device_1:
 		self.parameters["time_start"]=self.data_series[0][0]
 		self.parameters["time_finish"]=self.data_series[-1][0]
 		#формирование нового имени видео файла
-		self.videofile_name=self.device_name+'_'+str(self.parameters["time_start"])+'.avi'
+		self.videofile_name=self.device_name+'_'+str(self.parameters["time_start"])+'.' + self.videofile_extension
 		flag_read_data_series.clear()
 		print(f"[ОК!] read_data_series(): Data series read successfully: dTime={self.d_time}, FullTime={self.full_time}")
 		return 1
@@ -257,7 +276,13 @@ class Device_1:
 		Читается строка с минимальным id_experiment c отсутствующим time_start
 		'''
 		try:
+			# считывание из БД наименование параметров эксперимента
 			cursor_database=self.connection_database.cursor()
+			query=	"SELECT COLUMN_NAME FROM information_schema.columns " \
+					"WHERE table_name='" + self.device_name + "_parameters';"
+			cursor_database.execute(query)
+			column_name = cursor_database.fetchall()
+			# считывание из БД значений араметров эксперимента
 			query=	"SELECT * FROM " + self.device_name + "_parameters " \
 				"WHERE time_start IS NULL " \
 				"ORDER BY id_experiment ASC " \
@@ -266,12 +291,16 @@ class Device_1:
 			result = cursor_database.fetchone()
 			cursor_database.close()
 			# перезапись кортежа запроса в словарь параметров
-			b=0
-			for p in self.parameters:
-				self.parameters[p]=result[b]
-				b=b+1
-			print(f"[OK!] read_db_parameters(): The vector of experiment parameters was successfully read from the database. Result:\n {self.parameters}")
-			return 1
+			if len(column_name)==len(self.parameters):
+				b=0
+				for p in column_name:
+					self.parameters[p[0]]=result[b]
+					b=b+1
+				print(f"[OK!] read_db_parameters(): The vector of experiment parameters was successfully read from the database. Result:\n {self.parameters}")
+				return 1
+			else:
+				print(f"[FAULT!] read_db_parameters(): Parameter mismatch")
+				return 0
 		except:
 			print(f"[FAULT!] read_db_parameters(): Parameter database read error")			
 			return 0
@@ -286,7 +315,6 @@ class Device_1:
 				"time_start = '" + str(self.parameters["time_start"]) + "'," \
 				"time_finish = '" + str(self.parameters["time_finish"]) + "' "\
 				"WHERE id_experiment = '" + str(self.parameters["id_experiment"]) + "';"
-		
 		cursor_database.execute(query)
 		self.connection_database.commit()
 		cursor_database.close()
@@ -301,8 +329,9 @@ class Device_1:
 		if not self.webcam.isOpened():
 			print("[FAULT!] make_camera_capture(): Can`t capture the webcam")
 			return 0
-		webcam_codec=cv2.VideoWriter_fourcc(*'MJPG')
-		self.webcam_out=cv2.VideoWriter(self.temp_videofile_name, webcam_codec, self.webcam_fps, self.webcam_size)
+		webcam_codec=cv2.VideoWriter_fourcc(*self.videofile_codec)
+		temp_videofile_name=self.temp_videofile_name + '.' + self.videofile_extension
+		self.webcam_out=cv2.VideoWriter(temp_videofile_name, webcam_codec, self.webcam_fps, self.webcam_size)
 		print("[OK!] initialize_webcam(): Camera capture completed successfully")
 		return 1
 	
@@ -319,12 +348,31 @@ class Device_1:
 		self.webcam.release()
 		self.webcam_out.release()
 		# Переименовываем файл
-		if os.path.exists(self.temp_videofile_name):
-			os.rename(self.temp_videofile_name, self.videofile_name)
+		temp_videofile_name=self.temp_videofile_name+'.'+self.videofile_extension
+		if os.path.exists(temp_videofile_name):
+			os.rename(temp_videofile_name, self.videofile_name)
 			print(f"[OK!] read_webcam(): The webcam has successfully completed the video recording. Video file: {self.videofile_name}")
 			return self.videofile_name
 		return 0
-					
+	
+	def push_server_videofile(self):
+		'''
+		Отправляет видео файл на сервер и удаляет его на источнике
+		'''
+		# передача видео файла на сервер
+		videofile_name=self.videofile_name
+		print("[...] Waiting for the file to be generated")
+		while not os.path.exists(videofile_name):
+			pass
+		rsync_command = f"rsync -avz -e ssh {videofile_name} {self.host_config['user']}@{self.host_config['host']}:{self.host_config['destination']}"
+		subprocess.run(rsync_command, shell=True)
+		print(f"[ОК!] push_server_videofile(): The video file {self.videofile_name} was successfully sent to the server")
+		# удаление видео файла из текущей папки
+		os.remove(videofile_name)
+		if not os.path.exists(videofile_name):
+			print("[ОК!] File deleted successfully")
+		return 1
+			
 if __name__=="__main__":
 	device_1=Device_1()
 	device_1.connect_to_database()
@@ -332,12 +380,14 @@ if __name__=="__main__":
 		while device_1.read_db_parameters():
 			device_1.connect_to_device()
 			device_1.get_reading_speed()
-			device_1.set_initial_state()
+			if not device_1.set_initial_state():
+				break
 			device_1.push_parameters_to_device()
 			device_1.initialize_webcam()
 			device_1.read_data_series()
 			device_1.print_data_series()
 			device_1.write_db_data_series()
+			device_1.push_server_videofile()
 			device_1.update_db_parameters()
 		device_1.disconnect_from_database()
 		time.sleep(5)
