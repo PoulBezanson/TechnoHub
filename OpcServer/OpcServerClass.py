@@ -274,34 +274,42 @@ class Device_1:
 		Читать вектор параметров эксперимента из базы данных.
 		Читается строка с минимальным id_experiment c отсутствующим time_start
 		'''
-		
-		# считывание из БД наименование параметров эксперимента
+		# чтение списка колонок таблицы параметров эксперимента
+		column_name = []
 		cursor_database=self.connection_database.cursor()
-		query="call read_db_columns(%s)"
-		print(query)
-		cursor_database.execute(query,(self.device_name,))
-		column_name=cursor_database.fetchall()
-		print(column_name)
+		cursor_database.callproc("read_db_columns",[self.device_name])
+		# приведение списка колонок в удобному виду - избавление от вложенностей 
+		_result = []
+		for result_set in cursor_database.stored_results():
+			_result.append(result_set.fetchall())
+		for result_set in _result[0]:
+			column_name.append(result_set[0])
+		#print('Column name: ',column_name)
+		#print(column_name)
 		# считывание из БД значений параметров эксперимента
 		query=	"SELECT * FROM " + self.device_name + "_parameters " \
 			"WHERE time_start IS NULL " \
 			"ORDER BY id_experiment ASC " \
 			"LIMIT 1;"
 		cursor_database.execute(query)
-		result = cursor_database.fetchone()
+		parameters_select=cursor_database.fetchone()
 		cursor_database.close()
-		# перезапись кортежа запроса в словарь параметров
-		if len(column_name)==len(self.parameters):
-			b=0
-			for p in column_name:
-				self.parameters[p[0]]=result[b]
-				b=b+1
-			print(f"[OK!] read_db_parameters(): The vector of experiment parameters was successfully read from the database. Result:\n {self.parameters}")
-			return 1
+		#print("parameters_select", parameters_select)
+		if parameters_select!=None:
+			# перезапись кортежа запроса в словарь параметров
+			if len(column_name)==len(self.parameters):
+				b=0
+				for p in column_name:
+					self.parameters[p]=parameters_select[b]
+					b=b+1
+				print(f"[OK!] read_db_parameters(): The vector of experiment parameters was successfully read from the database. Result:\n {self.parameters}")
+				return 1
+			else:
+				print(f"[FAULT!] read_db_parameters(): Parameter mismatch")
+				sys.exit()
+			#print(self.parameters)
 		else:
-			print(f"[FAULT!] read_db_parameters(): Parameter mismatch")
-			return 0
-	
+			return 0	
 		#print(f"[FAULT!] read_db_parameters(): Parameter database read error")			
 		#return 0
 				
@@ -361,7 +369,7 @@ class Device_1:
 		'''
 		# передача видео файла на сервер
 		videofile_name=self.videofile_name
-		print("[...] Waiting for the file to be generated")
+		print("[...] push_server_videofile(): Waiting for the file to be generated")
 		while not os.path.exists(videofile_name):
 			pass
 		rsync_command = f"rsync -avz -e ssh {videofile_name} {self.host_config['user']}@{self.host_config['host']}:{self.host_config['destination']}"
@@ -390,6 +398,7 @@ if __name__=="__main__":
 			device_1.push_server_videofile()
 			device_1.update_db_parameters()
 		device_1.disconnect_from_database()
+		print(f"[...] read_db_parameters(): Waiting for the experiment")
 		time.sleep(5)
 		device_1.connect_to_database()
 	
