@@ -278,6 +278,7 @@ class Device_1:
 			# считывание из БД наименование параметров эксперимента
 			cursor_database=self.connection_database.cursor()
 			
+			# здесь нужно заменить запрос
 			query=	"SELECT COLUMN_NAME FROM information_schema.columns " \
 					"WHERE table_name='" + self.device_name + "_parameters';"
 			
