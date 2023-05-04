@@ -274,38 +274,36 @@ class Device_1:
 		Читать вектор параметров эксперимента из базы данных.
 		Читается строка с минимальным id_experiment c отсутствующим time_start
 		'''
-		try:
-			# считывание из БД наименование параметров эксперимента
-			cursor_database=self.connection_database.cursor()
-			
-			# здесь нужно заменить запрос
-			query=	"SELECT COLUMN_NAME FROM information_schema.columns " \
-					"WHERE table_name='" + self.device_name + "_parameters';"
-			
-			cursor_database.execute(query)
-			column_name = cursor_database.fetchall()
-			# считывание из БД значений араметров эксперимента
-			query=	"SELECT * FROM " + self.device_name + "_parameters " \
-				"WHERE time_start IS NULL " \
-				"ORDER BY id_experiment ASC " \
-				"LIMIT 1;"
-			cursor_database.execute(query)
-			result = cursor_database.fetchone()
-			cursor_database.close()
-			# перезапись кортежа запроса в словарь параметров
-			if len(column_name)==len(self.parameters):
-				b=0
-				for p in column_name:
-					self.parameters[p[0]]=result[b]
-					b=b+1
-				print(f"[OK!] read_db_parameters(): The vector of experiment parameters was successfully read from the database. Result:\n {self.parameters}")
-				return 1
-			else:
-				print(f"[FAULT!] read_db_parameters(): Parameter mismatch")
-				return 0
-		except:
-			print(f"[FAULT!] read_db_parameters(): Parameter database read error")			
+		
+		# считывание из БД наименование параметров эксперимента
+		cursor_database=self.connection_database.cursor()
+		query="call read_db_columns(%s)"
+		print(query)
+		cursor_database.execute(query,(self.device_name,))
+		column_name=cursor_database.fetchall()
+		print(column_name)
+		# считывание из БД значений параметров эксперимента
+		query=	"SELECT * FROM " + self.device_name + "_parameters " \
+			"WHERE time_start IS NULL " \
+			"ORDER BY id_experiment ASC " \
+			"LIMIT 1;"
+		cursor_database.execute(query)
+		result = cursor_database.fetchone()
+		cursor_database.close()
+		# перезапись кортежа запроса в словарь параметров
+		if len(column_name)==len(self.parameters):
+			b=0
+			for p in column_name:
+				self.parameters[p[0]]=result[b]
+				b=b+1
+			print(f"[OK!] read_db_parameters(): The vector of experiment parameters was successfully read from the database. Result:\n {self.parameters}")
+			return 1
+		else:
+			print(f"[FAULT!] read_db_parameters(): Parameter mismatch")
 			return 0
+	
+		#print(f"[FAULT!] read_db_parameters(): Parameter database read error")			
+		#return 0
 				
 	def update_db_parameters(self):
 		'''
