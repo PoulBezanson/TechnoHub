@@ -251,7 +251,6 @@ class Device_1:
 		Записать временной ряд данных в базу данных.
 		'''
 		cursor_database=self.connection_database.cursor()
-		#query="INSERT INTO d1_data_series (time_start, time_finish, co2, tvoc, pm1_0, pm2_5, pm10, temperature, humidity) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);"
 		s=""
 		for p in self.data:
 			s=s + "%s, "
@@ -278,8 +277,10 @@ class Device_1:
 		try:
 			# считывание из БД наименование параметров эксперимента
 			cursor_database=self.connection_database.cursor()
+			
 			query=	"SELECT COLUMN_NAME FROM information_schema.columns " \
 					"WHERE table_name='" + self.device_name + "_parameters';"
+			
 			cursor_database.execute(query)
 			column_name = cursor_database.fetchall()
 			# считывание из БД значений араметров эксперимента
