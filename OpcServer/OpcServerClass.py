@@ -278,23 +278,25 @@ class Device_1:
 		column_name = []
 		cursor_database=self.connection_database.cursor()
 		cursor_database.callproc("read_db_columns",[self.device_name])
-		# приведение списка колонок в удобному виду - избавление от вложенностей 
-		_result = []
-		for result_set in cursor_database.stored_results():
-			_result.append(result_set.fetchall())
-		for result_set in _result[0]:
-			column_name.append(result_set[0])
-		#print('Column name: ',column_name)
-		#print(column_name)
-		# считывание из БД значений параметров эксперимента
-		query=	"SELECT * FROM " + self.device_name + "_parameters " \
-			"WHERE time_start IS NULL " \
-			"ORDER BY id_experiment ASC " \
-			"LIMIT 1;"
-		cursor_database.execute(query)
-		parameters_select=cursor_database.fetchone()
+		# @1-1 приведение списка колонок в удобному виду - избавление от вложенностей 
+		stored_results=cursor_database.stored_results()
+		for r in stored_results:
+			_column_name = r.fetchall()
+		for r in _column_name:
+			column_name.append(r[0])
+		print("column_name:", column_name)
+		# @1-2 считывание из БД значений параметров эксперимента
+		cursor_database.callproc("read_db_parameters",[self.device_name])
+		_parameters_select = []	
+		for r in cursor_database.stored_results():
+			_parameters_select.append(r.fetchall())
+		parameters_select=_parameters_select[0][0]
+		print("parameters_select:", parameters_select)
+		
 		cursor_database.close()
-		#print("parameters_select", parameters_select)
+				
+		sys.exit()
+		
 		if parameters_select!=None:
 			# перезапись кортежа запроса в словарь параметров
 			if len(column_name)==len(self.parameters):
