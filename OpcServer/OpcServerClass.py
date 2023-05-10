@@ -111,7 +111,7 @@ class Device_1:
 			self.connection_device.clear_buffers_before_each_transaction = True
 		except:
 			print("[FAULT!] connect_to_device(): Sensor connection error")
-			return 0
+			return 1
 		else:
 			print("[OK!] connect_to_device(): Successful connection with the device")
 			return self.connection_device
@@ -148,11 +148,11 @@ class Device_1:
 			if backlight==self.ready_state["backlight_state"]:
 				print(f"[ОК!] set_initial_state(): Device initialization done")
 				flag_init=1
-				return 1
+				return 0
 			time.sleep(1)
 			t=t+1
 		print(f"[FAULT!] set_initial_state(): Device initialization problem")
-		return 0
+		return 1
 	
 	def __read_data(self):
 		'''
@@ -196,7 +196,7 @@ class Device_1:
 		self.videofile_name=self.device_name+'_'+str(self.parameters["time_start"])+'.' + self.videofile_extension
 		flag_read_data_series.clear()
 		print(f"[ОК!] read_data_series(): Data series read successfully: dTime={self.d_time}, FullTime={self.full_time}")
-		return 1
+		return 0
 
 	def __holdup_time(self):
 		'''
@@ -211,7 +211,7 @@ class Device_1:
 		'''
 		self.data_series=[]
 		print("[ОК!] clear_data_series(): Data series cleared")
-		return 1
+		return 0
 	
 	def print_data_series(self):
 		'''
@@ -267,7 +267,7 @@ class Device_1:
 		reg17_state=self.parameters["mute_state"] | (self.parameters["unit_state"]<<1)
 		self.connection_device.write_register(registeraddress=17, value=reg17_state, number_of_decimals=0, functioncode=6)
 		print("[ОК!] push_parameters_to_device(): Parameter vector sent to device")
-		return 1
+		return 0
 		
 	def read_db_parameters(self):
 		'''
@@ -278,25 +278,23 @@ class Device_1:
 		column_name = []
 		cursor_database=self.connection_database.cursor()
 		cursor_database.callproc("read_db_columns",[self.device_name])
-		# @1-1 приведение списка колонок в удобному виду - избавление от вложенностей 
+		# tsk1-1 приведение списка колонок в удобному виду - избавление от вложенностей 
 		stored_results=cursor_database.stored_results()
 		for r in stored_results:
 			_column_name = r.fetchall()
 		for r in _column_name:
 			column_name.append(r[0])
-		print("column_name:", column_name)
-		# @1-2 считывание из БД значений параметров эксперимента
+		# считывание из БД значений параметров эксперимента
 		cursor_database.callproc("read_db_parameters",[self.device_name])
+		parameters_select=None
 		_parameters_select = []	
 		for r in cursor_database.stored_results():
 			_parameters_select.append(r.fetchall())
-		parameters_select=_parameters_select[0][0]
-		print("parameters_select:", parameters_select)
-		
 		cursor_database.close()
-				
-		sys.exit()
-		
+		try:
+			parameters_select=_parameters_select[0][0]
+		except IndexError:
+			parameters_select=None
 		if parameters_select!=None:
 			# перезапись кортежа запроса в словарь параметров
 			if len(column_name)==len(self.parameters):
@@ -305,16 +303,15 @@ class Device_1:
 					self.parameters[p]=parameters_select[b]
 					b=b+1
 				print(f"[OK!] read_db_parameters(): The vector of experiment parameters was successfully read from the database. Result:\n {self.parameters}")
-				return 1
+				return 0
 			else:
 				print(f"[FAULT!] read_db_parameters(): Parameter mismatch")
 				sys.exit()
 			#print(self.parameters)
 		else:
-			return 0	
-		#print(f"[FAULT!] read_db_parameters(): Parameter database read error")			
-		#return 0
-				
+			print("[FAULT!] read_db_parameters(): Parameter list is None")
+			return 1	
+						
 	def update_db_parameters(self):
 		'''
 		Обновить поле о времени эксперимента в базе данных.
@@ -338,12 +335,12 @@ class Device_1:
 		#Error if capture failed
 		if not self.webcam.isOpened():
 			print("[FAULT!] make_camera_capture(): Can`t capture the webcam")
-			return 0
+			return 1
 		webcam_codec=cv2.VideoWriter_fourcc(*self.videofile_codec)
 		temp_videofile_name=self.temp_videofile_name + '.' + self.videofile_extension
 		self.webcam_out=cv2.VideoWriter(temp_videofile_name, webcam_codec, self.webcam_fps, self.webcam_size)
 		print("[OK!] initialize_webcam(): Camera capture completed successfully")
-		return 1
+		return 0
 	
 	def __read_webcam(self):
 		flag_read_data_series.wait()
@@ -363,8 +360,10 @@ class Device_1:
 			os.rename(temp_videofile_name, self.videofile_name)
 			print(f"[OK!] read_webcam(): The webcam has successfully completed the video recording. Video file: {self.videofile_name}")
 			return self.videofile_name
-		return 0
-	
+			return 0
+		else:
+			print(f"[FAULT!] read_webcam(): Video file {self.videofile_name} not exist")
+			return 1
 	def push_server_videofile(self):
 		'''
 		Отправляет видео файл на сервер и удаляет его на источнике
@@ -380,17 +379,20 @@ class Device_1:
 		# удаление видео файла из текущей папки
 		os.remove(videofile_name)
 		if not os.path.exists(videofile_name):
-			print("[ОК!] File deleted successfully")
-		return 1
+			print("[ОК!] push_server_videofile(): File deleted successfully")
+			return 0
+		else:
+			print("[FAULT!] push_server_videofile(): Problem deleting a file in a folder")
+			return 1
 			
 if __name__=="__main__":
 	device_1=Device_1()
 	device_1.connect_to_database()
 	while 1:
-		while device_1.read_db_parameters():
+		while not device_1.read_db_parameters():
 			device_1.connect_to_device()
 			device_1.get_reading_speed()
-			if not device_1.set_initial_state():
+			if device_1.set_initial_state():
 				break
 			device_1.push_parameters_to_device()
 			device_1.initialize_webcam()
