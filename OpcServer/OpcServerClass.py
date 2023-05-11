@@ -193,7 +193,13 @@ class Device_1:
 		self.parameters["time_start"]=self.data_series[0][0]
 		self.parameters["time_finish"]=self.data_series[-1][0]
 		#формирование нового имени видео файла
-		self.videofile_name=self.device_name+'_'+str(self.parameters["time_start"])+'.' + self.videofile_extension
+		if len(str(self.parameters["time_start"]))==17:
+			self.videofile_name=self.device_name+'_'+str(self.parameters["time_start"])+'.' + self.videofile_extension
+		elif len(str(self.parameters["time_start"]))==16:
+			self.videofile_name=self.device_name+'_'+str(self.parameters["time_start"])+'0.' + self.videofile_extension
+		else:
+			print("[FAULT!] clear_data_series(): Video file name formation error")
+			sys.exit()	
 		flag_read_data_series.clear()
 		print(f"[ОК!] read_data_series(): Data series read successfully: dTime={self.d_time}, FullTime={self.full_time}")
 		return 0
@@ -285,8 +291,8 @@ class Device_1:
 		for r in _column_name:
 			column_name.append(r[0])
 		# считывание из БД значений параметров эксперимента
-		cursor_database.callproc("read_db_parameters",[self.device_name])
 		parameters_select=None
+		cursor_database.callproc("read_db_parameters",[self.device_name])
 		_parameters_select = []	
 		for r in cursor_database.stored_results():
 			_parameters_select.append(r.fetchall())
@@ -316,13 +322,9 @@ class Device_1:
 		'''
 		Обновить поле о времени эксперимента в базе данных.
 		'''
+		#tsk1-2
 		cursor_database=self.connection_database.cursor()
-		query=	"UPDATE " +self.device_name+"_parameters " \
-				"SET " \
-				"time_start = '" + str(self.parameters["time_start"]) + "'," \
-				"time_finish = '" + str(self.parameters["time_finish"]) + "' "\
-				"WHERE id_experiment = '" + str(self.parameters["id_experiment"]) + "';"
-		cursor_database.execute(query)
+		cursor_database.callproc("update_db_parameters",[self.device_name,self.parameters["id_experiment"],self.parameters["time_start"],self.parameters["time_finish"]])
 		self.connection_database.commit()
 		cursor_database.close()
 		print(f"[OK!] update_db_parameters(): The vector of experiment parameters was successfully update into datadase.")
@@ -358,7 +360,7 @@ class Device_1:
 		temp_videofile_name=self.temp_videofile_name+'.'+self.videofile_extension
 		if os.path.exists(temp_videofile_name):
 			os.rename(temp_videofile_name, self.videofile_name)
-			print(f"[OK!] read_webcam(): The webcam has successfully completed the video recording. Video file: {self.videofile_name}")
+			print(f"[OK!] _read_webcam(): The webcam has successfully completed the video recording. Video file: {self.videofile_name}")
 			return self.videofile_name
 			return 0
 		else:
@@ -377,12 +379,13 @@ class Device_1:
 		subprocess.run(rsync_command, shell=True)
 		print(f"[ОК!] push_server_videofile(): The video file {self.videofile_name} was successfully sent to the server")
 		# удаление видео файла из текущей папки
-		os.remove(videofile_name)
+		#os.remove(videofile_name)
 		if not os.path.exists(videofile_name):
 			print("[ОК!] push_server_videofile(): File deleted successfully")
 			return 0
 		else:
 			print("[FAULT!] push_server_videofile(): Problem deleting a file in a folder")
+			#sys.exit()
 			return 1
 			
 if __name__=="__main__":
@@ -399,8 +402,8 @@ if __name__=="__main__":
 			device_1.read_data_series()
 			device_1.print_data_series()
 			device_1.write_db_data_series()
-			device_1.push_server_videofile()
 			device_1.update_db_parameters()
+			device_1.push_server_videofile()
 		device_1.disconnect_from_database()
 		print(f"[...] read_db_parameters(): Waiting for the experiment")
 		time.sleep(5)
