@@ -53,15 +53,15 @@ class Device_1:
 		# параметры эксперимента
 		self.d_time=0.1 		# время дискретизации измеряемого процесса (сек.) 
 		self.full_time=5 	# длительность эксперимента (сек.)
-		self.data={"time_start": None,
-					"time_reading": None,
-					"co2": None,
-					"tvoc": None,
-					"pm1_0": None,
-					"pm2_5": None,
-					"pm10": None,
-					"temperature": None,
-					"humidity": None}
+		self.data_round={"time_start": 6,
+					'time_reading': 6,
+					'co2':0,
+					'tvoc':2,
+					'pm1_0':0,
+					'pm2_5':0,
+					'pm10':0,
+					'temperature':1,
+					'humidity':1}
 		self.parameters={"id_experiment": None,
 						 "id_user": None,
 						 "publicity": None,
@@ -70,6 +70,7 @@ class Device_1:
 						 "mute_state": None,
 						 "unit_state": None}
 		self.data_series=[]
+		self.data_frame=pd.DataFrame()
 		# параметры базы данных
 		
 		'''
@@ -214,6 +215,22 @@ class Device_1:
 		print(f"[ОК!] read_data_series(): Data series read successfully: dTime={self.d_time}, FullTime={self.full_time}")
 		return 0
 
+	def processing_data_series(self):
+		'''
+		Обработать данные временного ряд векторов.
+		
+		'''
+		columns_name=[]
+		for key in self.data_round.items():
+			columns_name.append(key[0])
+		
+		self.data_frame = self.data_frame.append(self.data_series, ignore_index=True)
+		self.data_frame.columns = columns_name
+		self.data_frame=self.data_frame.round(self.data_round)
+		print("[...] processing_data_series(): Print data series:\n", self.data_frame)
+		return 0
+
+
 	def __holdup_time(self):
 		'''
 		Удержать время на единицу дискретизации d_time.
@@ -268,7 +285,7 @@ class Device_1:
 		'''
 		cursor_database=self.connection_database.cursor()
 		s=""
-		for p in self.data:
+		for p in self.data_round:
 			s=s + "%s, "
 		s=s[:-2]
 		query="call " + self.device_name + "_write_db_series(" + s + ");"
@@ -410,6 +427,9 @@ if __name__=="__main__":
 			device_1.push_parameters_to_device()
 			device_1.initialize_webcam()
 			device_1.read_data_series()
+			device_1.processing_data_series()
+			sys.exit()
+			
 			device_1.print_data_series()
 			device_1.write_db_data_series()
 			device_1.update_db_parameters()
