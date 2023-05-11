@@ -42,13 +42,16 @@ class Device_1:
 		self.stop_bits = 1
 		self.time_out=0.1
 		self.connection_device=None # экземпляр класса устройства modbus
+		self.registeraddress = 0
+		self.number_of_registers=7
+		self.functioncode=4
 		# параметры начальной инициализации устройства для set_initial_state()
 		self.init_state =	{"mute_state": 0,
 							"unit_state": 1}
 		self.ready_state = {"backlight_state":2}
 		self.ready_time=10 # предельная длительность инициализации начального состояния (сек.)
 		# параметры эксперимента
-		self.d_time=1 		# время дискретизации измеряемого процесса (сек.) 
+		self.d_time=0.1 		# время дискретизации измеряемого процесса (сек.) 
 		self.full_time=5 	# длительность эксперимента (сек.)
 		self.data={"time_start": None,
 					"time_reading": None,
@@ -95,7 +98,7 @@ class Device_1:
 		self.host_config={"host":"192.168.0.110",
 							"user":"administrator",
 							"password":"~/.ssh/id_rsa",
-							"destination":"/var/www/technohub/EXPERIMENT/VIDEO/"}
+							"destination":"/var/www/technohub/EXPERIMENT/TMP/"}
 			
 	def connect_to_device(self):
 		'''
@@ -160,6 +163,7 @@ class Device_1:
 		'''
 		flag_read_data.wait()
 		time_start=dt.datetime.now().timestamp()
+		'''
 		co2=self.connection_device.read_register(registeraddress=0, number_of_decimals=0, functioncode=4)  # Registernumber, number of decimals
 		tvoc=self.connection_device.read_register(registeraddress=1, number_of_decimals=2, functioncode=4)
 		pm1_0=self.connection_device.read_register(registeraddress=2, number_of_decimals=0, functioncode=4)
@@ -169,6 +173,12 @@ class Device_1:
 		humidity=self.connection_device.read_register(registeraddress=6, number_of_decimals=1, functioncode=4)
 		time_reading=dt.datetime.now().timestamp()-time_start
 		self.data_series.append([time_start, time_reading, co2, tvoc, pm1_0, pm2_5, pm10, temperature, humidity])
+		'''
+		_data_series=self.connection_device.read_registers(self.registeraddress, self.number_of_registers, self.functioncode)  # Registernumber, number of decimals
+		#tsk2-1
+		time_reading=dt.datetime.now().timestamp()-time_start
+		self.data_series.append([time_start, time_reading]+ _data_series)
+				
 		flag_read_data.clear()
 	
 	def read_data_series(self):
@@ -379,7 +389,7 @@ class Device_1:
 		subprocess.run(rsync_command, shell=True)
 		print(f"[ОК!] push_server_videofile(): The video file {self.videofile_name} was successfully sent to the server")
 		# удаление видео файла из текущей папки
-		#os.remove(videofile_name)
+		os.remove(videofile_name)
 		if not os.path.exists(videofile_name):
 			print("[ОК!] push_server_videofile(): File deleted successfully")
 			return 0
