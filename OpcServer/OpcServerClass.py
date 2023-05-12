@@ -51,17 +51,17 @@ class Device_1:
 		self.ready_state = {"backlight_state":2}
 		self.ready_time=10 # предельная длительность инициализации начального состояния (сек.)
 		# параметры эксперимента
-		self.d_time=0.1 		# время дискретизации измеряемого процесса (сек.) 
+		self.d_time=1 		# время дискретизации измеряемого процесса (сек.) 
 		self.full_time=5 	# длительность эксперимента (сек.)
-		self.data_round={"time_start": 6,
-					'time_reading': 6,
-					'co2':0,
-					'tvoc':2,
-					'pm1_0':0,
-					'pm2_5':0,
-					'pm10':0,
-					'temperature':1,
-					'humidity':1}
+		self.data_type={'time_start': (np.float64,0),
+					'time_reading': (np.float64,0),
+					'co2': (np.uint16,0),
+					'tvoc':(np.float64,-2),
+					'pm1_0':(np.uint16,0),
+					'pm2_5':(np.uint16,0),
+					'pm10':(np.uint16,0),
+					'temperature':(np.float64,-1),
+					'humidity':(np.float64,-1)}
 		self.parameters={"id_experiment": None,
 						 "id_user": None,
 						 "publicity": None,
@@ -86,11 +86,13 @@ class Device_1:
 		
 		
 		self.connection_database=None
+		# парметры файлов
+		self.file_name=None
+		self.videofile_extension="mp4" # врасширение видео файла
+		self.datafile_extension="csv" # врасширение видео файла
 		# парметры вэб-камеры	
 		self.temp_videofile_name="captured" # временное имя видео файла
-		self.videofile_extension="mp4" # временное имя видео файла
 		self.videofile_codec="mp4v"
-		self.videofile_name=None
 		self.webcam_fps=23.0
 		self.webcam_size=(640, 480)
 		self.webcam=None # экземпляр класса вэб камеры
@@ -205,9 +207,9 @@ class Device_1:
 		self.parameters["time_finish"]=self.data_series[-1][0]
 		#формирование нового имени видео файла
 		if len(str(self.parameters["time_start"]))==17:
-			self.videofile_name=self.device_name+'_'+str(self.parameters["time_start"])+'.' + self.videofile_extension
+			self.file_name=self.device_name+'_'+str(self.parameters["time_start"])
 		elif len(str(self.parameters["time_start"]))==16:
-			self.videofile_name=self.device_name+'_'+str(self.parameters["time_start"])+'0.' + self.videofile_extension
+			self.file_name=self.device_name+'_'+str(self.parameters["time_start"])+'0'
 		else:
 			print("[FAULT!] clear_data_series(): Video file name formation error")
 			sys.exit()	
@@ -220,17 +222,24 @@ class Device_1:
 		Обработать данные временного ряд векторов.
 		
 		'''
-		columns_name=[]
-		for key in self.data_round.items():
-			columns_name.append(key[0])
-		
-		self.data_frame = self.data_frame.append(self.data_series, ignore_index=True)
-		self.data_frame.columns = columns_name
-		self.data_frame=self.data_frame.round(self.data_round)
-		print("[...] processing_data_series(): Print data series:\n", self.data_frame)
+		print("[...] processing_data_series()") #, end='\r')
+		# формирование названия колонок
+		columns_name=[x for x in self.data_type]
+		# формирование таблицы DataFrame из временного ряда векторов параметров
+		temp_df = pd.DataFrame(self.data_series,columns=columns_name)
+		self.data_frame  = pd.concat([self.data_frame,temp_df])
+		# коррекция типа данных таблицы
+		self.data_frame=self.data_frame.astype({x:self.data_type[x][0] for x in self.data_type})
+		# преобразование данных - сдвиг запятой
+		for x in self.data_type:
+			self.data_frame[x]=self.data_frame[x]*pow(10,int(self.data_type[x][1]))
+		# запись данных в файл 
+		datafile_name=self.file_name+'.'+self.datafile_extension		
+		self.data_frame.to_csv(datafile_name)
+		print("[...] processing_data_series(): Print data series:\n")
+		print(self.data_frame)
 		return 0
-
-
+	
 	def __holdup_time(self):
 		'''
 		Удержать время на единицу дискретизации d_time.
@@ -285,7 +294,7 @@ class Device_1:
 		'''
 		cursor_database=self.connection_database.cursor()
 		s=""
-		for p in self.data_round:
+		for p in self.data_type:
 			s=s + "%s, "
 		s=s[:-2]
 		query="call " + self.device_name + "_write_db_series(" + s + ");"
@@ -384,37 +393,42 @@ class Device_1:
 		self.webcam.release()
 		self.webcam_out.release()
 		# Переименовываем файл
+		videofile_name=self.file_name+'.'+self.videofile_extension
 		temp_videofile_name=self.temp_videofile_name+'.'+self.videofile_extension
 		if os.path.exists(temp_videofile_name):
-			os.rename(temp_videofile_name, self.videofile_name)
-			print(f"[OK!] _read_webcam(): The webcam has successfully completed the video recording. Video file: {self.videofile_name}")
-			return self.videofile_name
-			return 0
+			os.rename(temp_videofile_name, videofile_name)
+			print(f"[OK!] _read_webcam(): The webcam has successfully completed the video recording. Video file: {self.file_name}")
+			return videofile_name
 		else:
-			print(f"[FAULT!] read_webcam(): Video file {self.videofile_name} not exist")
+			print(f"[FAULT!] read_webcam(): Video file {videofile_name} not exist")
 			return 1
-	def push_server_videofile(self):
+	def push_server_files(self):
 		'''
 		Отправляет видео файл на сервер и удаляет его на источнике
 		'''
-		# передача видео файла на сервер
-		videofile_name=self.videofile_name
-		print("[...] push_server_videofile(): Waiting for the file to be generated")
-		while not os.path.exists(videofile_name):
-			pass
-		rsync_command = f"rsync -avz -e ssh {videofile_name} {self.host_config['user']}@{self.host_config['host']}:{self.host_config['destination']}"
-		subprocess.run(rsync_command, shell=True)
-		print(f"[ОК!] push_server_videofile(): The video file {self.videofile_name} was successfully sent to the server")
-		# удаление видео файла из текущей папки
-		os.remove(videofile_name)
-		if not os.path.exists(videofile_name):
-			print("[ОК!] push_server_videofile(): File deleted successfully")
-			return 0
-		else:
-			print("[FAULT!] push_server_videofile(): Problem deleting a file in a folder")
-			#sys.exit()
-			return 1
-			
+		# передача  файла на сервер
+		print("[...] push_server_file():")
+		videofile_name=self.file_name+'.'+self.videofile_extension
+		datafile_name=self.file_name+'.'+self.datafile_extension
+		file_names=[videofile_name, datafile_name]
+		for file_name in file_names:
+			print("[...] push_server_file(): Waiting for the file to be generated")
+			while not os.path.exists(file_name):
+				pass
+			rsync_command = f"rsync -avz -e ssh {file_name} {self.host_config['user']}@{self.host_config['host']}:{self.host_config['destination']}"
+			subprocess.run(rsync_command, shell=True)
+			print(f"[ОК!] push_server_file(): The file {file_name} was successfully sent to the server")
+			# удаление файла из текущей папки
+			os.remove(file_name)
+			if not os.path.exists(file_name):
+				print("[ОК!] push_server_file(): File deleted successfully")
+				
+			else:
+				print("[FAULT!] push_server_file(): Problem deleting a file in a folder")
+				#sys.exit()
+				return 1
+		return 0
+		
 if __name__=="__main__":
 	device_1=Device_1()
 	device_1.connect_to_database()
@@ -428,12 +442,10 @@ if __name__=="__main__":
 			device_1.initialize_webcam()
 			device_1.read_data_series()
 			device_1.processing_data_series()
-			sys.exit()
-			
 			device_1.print_data_series()
 			device_1.write_db_data_series()
 			device_1.update_db_parameters()
-			device_1.push_server_videofile()
+			device_1.push_server_files()
 		device_1.disconnect_from_database()
 		print(f"[...] read_db_parameters(): Waiting for the experiment")
 		time.sleep(5)
