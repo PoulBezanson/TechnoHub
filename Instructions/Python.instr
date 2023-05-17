@@ -1,5 +1,10 @@
 Работа с виртуальной средой virtualenv
 $ pip3 freeze > envProject.txt - сохранение параметров виртуальной среды
+$ mkvirtualenv env-name  - cоздаем новое окружение
+$ workon - cмотрим список окружений
+$ workon env-name - меняем окружение
+$ deactivate - выходим из окружения
+$ rmvirtualenv env-name - удаляем окружение
 
 Работа с менеджером пакетов pip3
 $ pip3 list - список установленных пакетов

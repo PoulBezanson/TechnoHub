@@ -53,7 +53,7 @@ class Device_1:
 		# параметры эксперимента
 		self.d_time=1 		# время дискретизации измеряемого процесса (сек.) 
 		self.full_time=5 	# длительность эксперимента (сек.)
-		self.data_type={'time_start': (np.float64,0),
+		self.data_type={'time_start': (np.float64,0), # формат вектора параметров (тип данных, сдвиг десятичной запятой)
 					'time_reading': (np.float64,0),
 					'co2': (np.uint16,0),
 					'tvoc':(np.float64,-2),
@@ -70,7 +70,6 @@ class Device_1:
 						 "mute_state": None,
 						 "unit_state": None}
 		self.data_series=[]
-		self.data_frame=pd.DataFrame()
 		# параметры базы данных
 		
 		'''
@@ -219,25 +218,28 @@ class Device_1:
 
 	def processing_data_series(self):
 		'''
-		Обработать данные временного ряд векторов.
-		
+		Обработать данные временного ряда векторов.
 		'''
 		print("[...] processing_data_series()") #, end='\r')
-		# формирование названия колонок
+		# формирование названия колонок таблицы данных
 		columns_name=[x for x in self.data_type]
 		# формирование таблицы DataFrame из временного ряда векторов параметров
-		temp_df = pd.DataFrame(self.data_series,columns=columns_name)
-		self.data_frame  = pd.concat([self.data_frame,temp_df])
+		data_frame=pd.DataFrame(self.data_series,columns=columns_name)
 		# коррекция типа данных таблицы
-		self.data_frame=self.data_frame.astype({x:self.data_type[x][0] for x in self.data_type})
-		# преобразование данных - сдвиг запятой
+		data_frame=data_frame.astype({x:self.data_type[x][0] for x in self.data_type})
+		# преобразование данных - сдвиг десятичной запятой
 		for x in self.data_type:
-			self.data_frame[x]=self.data_frame[x]*pow(10,int(self.data_type[x][1]))
+			data_frame[x]=data_frame[x]*pow(10,int(self.data_type[x][1]))
+		# округление числовых данных
+		round_type = {x: abs(self.data_type[x][1]) for x in self.data_type}
+		round_type['time_start']=6
+		round_type['time_reading']=6
+		data_frame=data_frame.round(round_type)
 		# запись данных в файл 
 		datafile_name=self.file_name+'.'+self.datafile_extension		
-		self.data_frame.to_csv(datafile_name)
+		data_frame.to_csv(path_or_buf=datafile_name, sep=';', decimal=',')
 		print("[...] processing_data_series(): Print data series:\n")
-		print(self.data_frame)
+		print(data_frame)
 		return 0
 	
 	def __holdup_time(self):
