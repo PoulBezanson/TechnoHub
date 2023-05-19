@@ -1,5 +1,6 @@
 Работа с виртуальной средой virtualenv
-$ pip3 freeze > envProject.txt - сохранение параметров виртуальной среды
+$ pip3 freeze > filename.txt - сохранение параметров виртуальной среды в файл
+$ pip install -r filename.txt - установка пакетов виртуальной среды из файла
 $ mkvirtualenv env-name  - cоздаем новое окружение
 $ workon - cмотрим список окружений
 $ workon env-name - меняем окружение

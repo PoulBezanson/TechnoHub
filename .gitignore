@@ -1,4 +1,2 @@
-OpcServer/d1_*
-OpcServer/__pycache__/
-DisLab/VIDEO/
-DisLab/REC/
+Devices/d1_[0-9]*
+Devices/__pycache__/
