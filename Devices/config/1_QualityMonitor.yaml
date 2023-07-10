@@ -1,0 +1,10 @@
+# идентификаторы установки
+device_identifiers:
+  id_device: a1
+  hash_key: 8804b613
+# конфигурация базы данных
+db_config:
+  host: 91.122.14.126
+  database: technohub
+  user: orangepi
+  password: mariadb
