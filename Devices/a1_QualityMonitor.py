@@ -9,30 +9,25 @@
 # author: Poul Bezanson
 # email:
 
+import sys
+sys.path.insert(0, "/home/orangepi/projects/TechnoHub/Devices/modules/")
+#import keyboard
+from pynput import keyboard
 import time
-#export PYTHONPATH=/home/orangepi/projects/TechnoHub/OpcServer/modules/
-import d1_QualityMonitor_class as dv
+import threading 
+import class1_QualityMonitor as dv
 
-		
+def on_key(key):
+	if key == keyboard.Key.esc:
+		device_1.set_status_device('offline')
+
 if __name__=="__main__":
-	device_1=dv.Device()
-	device_1.connect_to_database()
-	while 1:
-		while not device_1.read_db_parameters():
-			device_1.connect_to_device()
-			device_1.get_reading_speed()
-			if device_1.set_initial_state():
-				break
-			device_1.push_parameters_to_device()
-			device_1.initialize_webcam()
-			device_1.read_data_series()
-			device_1.processing_data_series()
-			device_1.print_data_series()
-			device_1.write_db_data_series()
-			device_1.update_db_parameters()
-			device_1.push_server_files()
-		device_1.disconnect_from_database()
-		print(f"[...] read_db_parameters(): Waiting for the experiment")
-		time.sleep(5)
-		device_1.connect_to_database()
+	device_1=dv.Device() 
+	listener = keyboard.Listener(on_release=on_key)
+	listener.start()
+	while device_1.get_status_device()=='None':
+		#print('1')
+		print(keyboard.is_pressed('a'))
+		#print(device_1.get_status_device())
+	print(device_1.get_status_device())
 	
