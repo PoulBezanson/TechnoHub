@@ -1,17 +1,30 @@
-time_update:  1689255008 # время модификации в формате TIMESTEMP
+time_update: 1689271034 # время модификации в формате TIMESTEMP
 time_options: # временные параметры эксперимента
   name: временные параметры
-  values:  
-  model_time:
-      ws_name: стартовое значение времени
-      ws_dimension: состояние
-      ws_type: integer 
-      ws_regexp: ^(нет|слабо|сильно)$
-      ws_value: 0
-      ws_dictionary: {нет: 0, слабо: 1, сильно: 2}
+  values: 
+    start_time:
+      ws_name: начальное значение времени
+      ws_dimension: сек
+      ws_type: integer
+      ws_regexp: ^([1-9]|10)$
+      ws_value: целое число 1 от до 10
+      ws_control: field
+    delta_time:
+      ws_name: время дискретизации
+      ws_dimension: сек
+      ws_type: float
+      ws_regexp: null
+      ws_value: 0.2
       ws_control: readonly
-inical_options:
-  name: временные параметры
+    scale_time:
+      ws_name: масштаб времени
+      ws_dimension: б/р
+      ws_type: float
+      ws_regexp: null
+      ws_value: 1
+      ws_control: readonly    
+initial state:
+  name: Начальное состояние
   values:
     back_light:
       ws_name: интенсивность подсветки
