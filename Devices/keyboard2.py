@@ -5,7 +5,7 @@ import tty
 
 # Функция, которая будет выполняться в фоновом режиме для опроса клавиатуры
 mystat=True
-def keyboard_listener():
+def scan_keyboard():
 	global mystat
 	# Получаем текущие настройки терминала
 	old_settings = termios.tcgetattr(sys.stdin)
@@ -56,9 +56,9 @@ def main_program():
 	print("Основная программа запущена.")
 
 	# Создаем и запускаем поток для опроса клавиатуры
-	keyboard_thread = threading.Thread(target=keyboard_listener)
-	keyboard_thread.daemon = True
-	keyboard_thread.start()
+	scan_keyboard_tread = threading.Thread(target=scan_keyboard)
+	scan_keyboard_tread.daemon = True
+	scan_keyboard_tread.start()
 
 	# Здесь можно добавить вашу основную логику программы
 
