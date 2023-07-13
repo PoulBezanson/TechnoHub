@@ -1,0 +1,66 @@
+time_update:  1689255008 # время модификации в формате TIMESTEMP
+time_options: # временные параметры эксперимента
+  name: временные параметры
+  values:  
+  model_time:
+      ws_name: стартовое значение времени
+      ws_dimension: состояние
+      ws_type: integer 
+      ws_regexp: ^(нет|слабо|сильно)$
+      ws_value: 0
+      ws_dictionary: {нет: 0, слабо: 1, сильно: 2}
+      ws_control: readonly
+inical_options:
+  name: временные параметры
+  values:
+    back_light:
+      ws_name: интенсивность подсветки
+      ws_dimension: состояние
+      ws_type: integer 
+      ws_regexp: ^(нет|слабо|сильно)$
+      ws_value: нет, слабо или сильно
+      ws_dictionary: {нет: 0, слабо: 1, сильно: 2}
+      ws_control: switch
+      mb_reg_name: holding # input, holding
+      mb_reg_address: 16
+      mb_reg_type: uint16_t
+      mb_decimals: 0 # если число то это степень 1/10 при чтении и 10 при записи
+    mute_state:
+      ws_name: звуковая сигнализация
+      ws_dimension: состояние
+      ws_type: integer
+      ws_regexp: ^[0-1]$
+      ws_value: 0 или 1
+      ws_control: switch
+      mb_reg_name: holding
+      mb_reg_address: 17
+      mb_reg_type: bit
+      mb_decimals: 0 # если бит то это сдвиг 
+model_parameters: # параметры модели
+  name: Параметры модели
+  values:
+    temperature_unit:
+      ws_name: размерность температуры
+      ws_dimension: код
+      ws_type: integer
+      ws_regexp: ^[F,C]$
+      ws_value: F или C 
+      ws_control: switch 
+influences: # параметры входных воздействий
+  name: Параметры внешней среды
+  values:
+    air_flow:
+      ws_name: величина потока воздуха
+      ws_dimension: куб.м в сек.
+      ws_type: string
+      ws_regexp: null
+      ws_value: 0
+      ws_control: readonly
+comments: # комментарий к эксперименту
+  name: Комментарии к эксперименту
+  values:
+    comment:
+      ws_name: Комментарий
+      ws_regexp: ^(?!.*краткий\sкомментарий).*
+      ws_value: краткий комментарий
+      ws_control: field

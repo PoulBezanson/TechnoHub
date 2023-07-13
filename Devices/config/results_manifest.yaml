@@ -1,0 +1,102 @@
+time_update:  1689255008 # время модификации в формате TIMESTEMP
+dataset_options: # временные параметры эксперимента
+  name: параметры выходных данных
+  values:
+    datafile_extension:
+      ws_name: формат файла данных
+      ws_value: null  
+      ws_value: csv
+      mb_reg_name: null # input, holding
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: null
+    time_start:
+      ws_name: модельное время начала измерения вектора данных 
+      ws_value: null
+      ws_dimension: сек
+      mb_reg_name: null # input, holding
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: null
+    time_reading':
+      ws_name: время считывания вектора данных
+      ws_value: null
+      ws_dimension: сек
+      mb_reg_name: null # input, holding
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: null 
+    co2: 
+      ws_name: значение концентрации углекислого газа CO2
+      ws_value: null
+      ws_dimension: ppm
+      mb_reg_name: input # input, holding
+      mb_reg_address: 0
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+    tvoc:
+      ws_name: концентрация летучих органических соединений
+      ws_value: null
+      ws_dimension: мг/м^3
+      mb_reg_name: input # input, holding
+      mb_reg_address: 1
+      mb_reg_type: uint16_t
+      mb_decimals: 2
+    pm1_0:
+      ws_name: концентрация ультрадисперсионных частиц PM1.0
+      ws_value: null
+      ws_dimension: мкг/м^3
+      mb_reg_name: input # input, holding
+      mb_reg_address: 2
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+    pm2_5:
+      ws_name: концентрация ультрадисперсионных частиц PM2.5
+      ws_value: null
+      ws_dimension: мкг/м^3
+      mb_reg_name: input # input, holding
+      mb_reg_address: 3
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+    pm10:
+      ws_name: концентрация ультрадисперсионных частиц PM10
+      ws_dimension: мкг/м^3
+      mb_reg_name: input # input, holding
+      mb_reg_address: 4
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+    temperature:
+      ws_name: концентрация ультрадисперсионных частиц PM10
+      ws_value: null
+      ws_dimension: гр
+      mb_reg_name: input # input, holding
+      mb_reg_address: 5
+      mb_reg_type: uint16_t
+      mb_decimals: 1
+    humidity:
+      ws_name: концентрация ультрадисперсионных частиц PM10
+      ws_value: null
+      ws_dimension: процент
+      mb_reg_name: input # input, holding
+      mb_reg_address: 6
+      mb_reg_type: uint16_t
+      mb_decimals: 1 
+video_options: # временные параметры эксперимента
+  name: параметры выходного видеофайла
+  values:
+    extension:
+      ws_name: формат видеофайла
+      ws_value: mp4
+      ws_dimension: null
+    codec:
+      ws_name: кодек видео видеофайла
+      ws_value: mp4v
+      ws_dimension: null
+    fps:
+      ws_name: частота кадров
+      ws_value: 23.0
+      ws_dimension: кадр/сек
+    size:  
+      ws_name: качество картинки
+      ws_value: (640, 480)
+      ws_dimension: (точек,точек)
