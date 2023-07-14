@@ -10,13 +10,10 @@ db_config:
   password: mariadb
 # конфигурация сети modbus
 modbus_config:
-  self.device_name='d1'
-  port_name='/dev/ttyUSB0'
-  slave_address=100
-  baud_rate=9600
-  byte_size=8
-  stop_bits=1
-  time_out=0.1
-  registeraddress = 0
-  number_of_registers=7
-  functioncode=4
+  port_name: /dev/ttyUSB0
+  slave_address: 100
+  baud_rate: 9600
+  byte_size: 8
+  stop_bits: 1
+  time_out: 0.1
+  

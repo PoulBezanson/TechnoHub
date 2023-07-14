@@ -69,13 +69,13 @@ class Device:
 		self.device_identifiers=None	# идентификаторы экспериментальной установки
 		self.db_config=None				# параметры входа в базу данных
 		self.db_connection=None			# коннектор базы данных
-		self.dv_config=None				# параметры соединения с промышленной шиной
-		self.db_connection=None			# коннектор промышленной шины
+		self.bus_config=None			# параметры соединения с промышленной шиной
+		self.dv_connection=None			# коннектор промышленной шины
 		self.status_device=[]    		# текущий статус установки
 		self.previus_status=[] 			# предыдущий статус канала
 		self.keyboard_value='None'		# последнее набранное значение на клавиатуре
 		self.option_manifest=None    	# структура json со спецификациями эксперимента
-		self.state_connection=None   	# структура состояния соединения
+		
 		self.status_dictionary=None   		# список возможных статусов
 		self.init_controller()			# вызов дополнительной процедуры инициализации
 	
@@ -87,10 +87,7 @@ class Device:
 		      f'[{self.init_controller.__name__}]:')
 		
 		# чтение файла сетевой конфигурации .yaml и идентификация установки
-		with open(self.connections_config_file, 'r') as file:
-			connections_config=yaml.safe_load(file)
-			print('\t','[ОК!] Configuration file read')
-		
+		connections_config=self.read_connections_config()
 		self.device_identifiers=connections_config['device_identifiers']
 		
 		# открытие соединения с базой данных сервера
@@ -195,6 +192,54 @@ class Device:
 		'''
 		return self.status_dictionary
 	
+	def read_connections_config(self):
+		'''
+		Прочитать файл с параметрами соединений 
+		'''
+		try:
+			with open(self.connections_config_file, 'r') as file:
+				result=yaml.safe_load(file)
+				print('\t','[ОК!] Connection config file read')
+			return result
+		except:
+			print('\t','[FAULT!] Connection config file NOT read')
+			
+	def read_experiment_manifest(self):
+		'''
+		Прочитать файл с параметрами эксперимента 
+		'''
+		try:
+			with open(self.experiment_manifest_file, 'r') as file:
+				result=yaml.safe_load(file)
+				print('\t','[ОК!] Experiment_manifest file read')
+			return result
+		except:
+			print('\t','[FAULT!] Experiment_manifest file NOT read')
+	
+	def read_options_manifest(self):
+		'''
+		Прочитать файл с параметрами модели 
+		'''
+		try:
+			with open(self.options_manifest_file, 'r') as file:
+				result=yaml.safe_load(file)
+				print('\t','[ОК!] Options manifest file read')
+			return result
+		except:
+			print('\t','[FAULT!] Options manifest file NOT read')
+	
+	def read_results_manifest(self):
+		'''
+		Прочитать файл с параметрами разультирующего вектора 
+		'''
+		try:
+			with open(self.results_manifest_file, 'r') as file:
+				result = yaml.safe_load(file)
+				print('\t','[ОК!] Results manifest file read')
+			return result
+		except:
+			print('\t','[FAULT!] Results manifest file NOT read')
+		
 	def set_status_device(self, _new_status):
 		'''
 		Установить новый текущий статус 
@@ -214,23 +259,19 @@ class Device:
 		# чтение файла манифеста эксперимента
 		
 		# !!! нужно добавить try 
-		with open(self.experiment_manifest_file, 'r') as file:
-			experiment_manifest=yaml.safe_load(file)
-			print('\t','[ОК!] Experiment manifest file read')
 		
-		# чтение файла манифеста параметров эксперимента
-		with open(self.options_manifest_file, 'r') as file:
-			options_manifest=yaml.safe_load(file)
-			print('\t','[ОК!] Options manifest file read')	
-		
-		# чтение файла манифеста выходных данных
-		with open(self.results_manifest_file, 'r') as file:
-			results_manifest=yaml.safe_load(file)
-			print('\t','[ОК!] Results manifest file read')
+		# чтение файла манифеста параметров модели
+		experiment_manifest=self.read_experiment_manifest()
+				
+		# чтение файла манифеста параметров модели
+		options_manifest=self.read_options_manifest()
+				
+		# чтение атрибутов манифеста выходных данных
+		results_manifest=self.read_results_manifest()
 					
 		# подготовка данных манифестов для обновления
 		if experiment_manifest['time_update']==options_manifest['time_update'] and \
-		    experiment_manifest['time_update']==results_manifest['time_update']:
+			experiment_manifest['time_update']==results_manifest['time_update']:
 			routin_parameters=[]
 			routin_parameters.append(experiment_manifest['time_update'])
 			routin_parameters.append(self.device_identifiers['hash_key'])
@@ -241,6 +282,7 @@ class Device:
 			del options_manifest['time_update']
 			json_options_manifest = json.dumps(options_manifest)
 			routin_parameters.append(json_options_manifest)
+			del results_manifest['time_update']
 			json_results_manifest = json.dumps(results_manifest)
 			routin_parameters.append(json_results_manifest)
 			tags=''
@@ -273,36 +315,68 @@ class Device:
 			print(f'\t [FAULT!] STOP controller on stage 1')
 			sys.exit()
 				
-	def delete_claimes(self):
+	def up_init_connection(self):
 		'''
-		Удалить все свободные заявки
-		'''
-		print(dt.datetime.now().strftime("%Y-%m-%d %H:%M"), \
-		                                 '[Device::delete_claimes] ', \
-		                                 'Inicialization comlite')
-		return 0
-	
-	def down_test_connection(self):
-		'''
-		Удалить все свободные заявки
+		Инициировать соединение с объектом управления. Оценить скорость чтения вектора выходных данных  
 		'''
 		# открытие соединения с промышленной шиной
-		self.dv_config=connections_config['modbus_config']
+		connections_config=self.read_connections_config()
+		self.bus_config=connections_config['modbus_config']
 		try:
-			self.dv_connection=minimalmodbus.Instrument(self.dv_config['port_name'],\
-														      self.dv_config['slave_address'])  # port name, slave address (in decimal)
-			self.dv_connection.serial.baudrate = self.dv_config['baud_rate']
-			self.dv_connection.serial.bytesize = self.dv_config['byte_size']
-			self.dv_connection.serial.stopbits = self.dv_config['stop_bits']
-			self.dv_connection.serial.timeout  = self.dv_config['time_out']
+			self.dv_connection=minimalmodbus.Instrument(self.bus_config['port_name'],\
+															  self.bus_config['slave_address'])  # port name, slave address (in decimal)
+			self.dv_connection.serial.baudrate = self.bus_config['baud_rate']
+			self.dv_connection.serial.bytesize = self.bus_config['byte_size']
+			self.dv_connection.serial.stopbits = self.bus_config['stop_bits']
+			self.dv_connection.serial.timeout  = self.bus_config['time_out']
 			self.dv_connection.mode = minimalmodbus.MODE_RTU   # rtu or ascii mode
 			self.dv_connection.clear_buffers_before_each_transaction = True
 		except:
-			print('\t','[FAULT!] No device connection')
+			print('\t','[FAULT!] NO divice connection by modbus')
+			sys.exit() 
 		else:
-			print('\t','[OK!] Connected to device')
+			print('\t','[OK!] Connected to device by modbus')
+		
+		# чтение манифеста параметров выходных данных 
+		results_manifest=self.read_results_manifest()
+		dataset_options=results_manifest['dataset_options']
+		values=dataset_options['values']
+		
+		# формировние словаря имен регистров указанием самого младшего адреса  
+		registers_dict_min={}
+		for k, v in values.items():
+			if v['mb_reg_name']!=None and not (v['mb_reg_name'] in registers_dict_min):
+				registers_dict_min[v['mb_reg_name']]=v['mb_reg_address']
+			elif v['mb_reg_name']!=None and v['mb_reg_address']<registers_dict_min[v['mb_reg_name']]:
+				registers_dict[v['mb_reg_name']]=v['mb_reg_address']
+		print(f'\t [OK!] Created a list of registers: {registers_dict_min}')
+		#!!! нужно предусмотреть проверку правильности инеми регистров
+		
+		# формировние словаря имен регистров указанием самого старшего адреса  
+		registers_dict_max={}
+		for k, v in values.items():
+			if v['mb_reg_name']!=None and not (v['mb_reg_name'] in registers_dict_max):
+				registers_dict_max[v['mb_reg_name']]=v['mb_reg_address']
+			elif v['mb_reg_name']!=None and v['mb_reg_address']>registers_dict_max[v['mb_reg_name']]:
+				registers_dict_max[v['mb_reg_name']]=v['mb_reg_address']
+		print(f'\t [OK!] Created a list of registers: {registers_dict_max}')
+		#!!! нужно предусмотреть проверку правильности инеми регистров
+		
+		# формирование команд 
+		dataset_vector=[]
+		for k, v in registers_dict_min.items():
+			register_address=v
+			number_of_registers=registers_dict_max[k]-registers_dict_min[k]+1
+			if k=='input':
+				function_code=4
+			if k=='holding':
+				function_code=3
+			dataset_vector=dataset_vector+self.dv_connection.read_registers(register_address,\
+											number_of_registers,\
+											function_code)
+		print(f'\t [OK!] Dataset vector read: {dataset_vector}')
 		return 0
-	
+		
 def scan_keyboard(_device):
 	'''
 	Реализует фоновый опрос клавиатуры на предмет ввода режима 
@@ -349,4 +423,4 @@ def scan_keyboard(_device):
         # Восстанавливаем настройки терминала
 		termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 		sys.exit
-	
+

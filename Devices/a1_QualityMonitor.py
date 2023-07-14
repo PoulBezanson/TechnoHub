@@ -23,7 +23,10 @@ if __name__=="__main__":
 	# инициализация контроллера
 	device=dv.Device()
 	
+	# тестировочный блок
 	#device.test()
+	#device.up_init_connection()
+	#sys.exit()
 	
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 			f'[Запрос предыдущего статуса  контроллера]:\n'
@@ -70,9 +73,9 @@ if __name__=="__main__":
 	
 	# проверка связи с экспериментальной установкой
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[Обновление в базе данных подтвержденного статуса]:\n'
-			  f'\t [OK!] Waiting for push new status...')
-	
+		      f'[Установление связи с экспериментальной установкой]:')
+	device.up_init_connection()
+		
 	'''
 	2 этап - реализация режима
 	'''
