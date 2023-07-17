@@ -68,13 +68,14 @@ if __name__=="__main__":
 	device.set_status_device(device.pull_status_device())
 	
 	if device.get_status_device()[3] == 2 or device.get_status_device()[3] == 4:
-		print(f'\t [OK!] Stop controller on stage 1')
+		del device
 		sys.exit()
 	
 	# проверка связи с экспериментальной установкой
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 		      f'[Установление связи с экспериментальной установкой]:')
-	device.up_init_connection()
+	device.set_modbus_connection()
+	device.up_dataset_vector()
 		
 	'''
 	2 этап - реализация режима
@@ -87,6 +88,6 @@ if __name__=="__main__":
 		continue
 	device.push_status_device('Status was confirmed at initialization',device.get_keyboard_value())
 	device.set_status_device(device.pull_status_device())	
-	print(f'\t [OK!] Stop controller on stage 2')
+	
 	
 	

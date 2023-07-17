@@ -1,4 +1,4 @@
-time_update: 1689332100 # время модификации в формате TIMESTEMP
+time_update: 1689599591 # время модификации в формате TIMESTEMP
 name: Монитор качества воздуха
 experiment_type: physical
 description: Эксперимент позволяет регистрировать параметры воздуха в учебном помещении
@@ -28,4 +28,5 @@ full_description: >-
                   можно посмотреть по ссылке [Текст ссылки](https://www.example.com).
                   You can even add equation numbers (unfortunately there is no
                   automatic numbering and refs support)
-                  $$|\vec{A}|=\sqrt{A_x^2 + A_y^2 + A_z^2}.$$(1)
+                  $$|\vec{A}|=\sqrt{A_x^2 + A_y^2 + A_z^2}.(1)$$
+                  $$\[\oint_a^b\overbrace{ab}\frac{-b\pm\sqrt{b^2-4ac}}{2a}\]$$

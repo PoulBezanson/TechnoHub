@@ -1,10 +1,11 @@
-time_update: 1689332100 # время модификации в формате TIMESTEMP
+time_update: 1689599591 # время модификации в формате TIMESTEMP
 dataset_options: # временные параметры эксперимента
   name: Параметры выходных данных
   values:
     datafile_extension: 
       ws_name: формат файла данных
       ws_value: csv
+      ws_dimension:
       ws_regexp: .*
       ws_control: readonly
       mb_reg_name: null # input, holding

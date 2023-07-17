@@ -1,4 +1,4 @@
-time_update: 1689332100 # время модификации в формате TIMESTEMP
+time_update: 1689599591 # время модификации в формате TIMESTEMP
 time_options: # временные параметры эксперимента
   name: Временные параметры
   values: 
@@ -14,7 +14,7 @@ time_options: # временные параметры эксперимента
       ws_dimension: сек
       ws_type: float
       ws_regexp: null
-      ws_value: 0.2
+      ws_value: 0.01
       ws_control: readonly
     scale_time:
       ws_name: масштаб времени
@@ -23,7 +23,7 @@ time_options: # временные параметры эксперимента
       ws_regexp: null
       ws_value: 1
       ws_control: readonly    
-initial state:
+initial state: # контролируемые параметры начального состояния
   name: Начальное состояние
   values:
     back_light:
@@ -38,27 +38,33 @@ initial state:
       mb_reg_address: 16
       mb_reg_type: uint16_t
       mb_decimals: 0 # если число то это степень 1/10 при чтении и 10 при записи
+model_parameters: # параметры модели
+  name: Параметры модели
+  values:
     mute_state:
       ws_name: звуковая сигнализация
       ws_dimension: состояние
       ws_type: integer
-      ws_regexp: ^[0-1]$
-      ws_value: 0 или 1
+      ws_regexp: ^(выкл|вкл)$
+      ws_value: выкл или вкл
       ws_control: switch
+      mb_dictionary: {выкл: 0, вкл: 1}
       mb_reg_name: holding
       mb_reg_address: 17
       mb_reg_type: bit
       mb_decimals: 0 # если бит то это сдвиг 
-model_parameters: # параметры модели
-  name: Параметры модели
-  values:
     temperature_unit:
       ws_name: размерность температуры
       ws_dimension: код
       ws_type: integer
       ws_regexp: ^[F,C]$
-      ws_value: F или C 
-      ws_control: switch 
+      ws_value: F или C
+      ws_dictionary: {C: 0, F: 1}
+      ws_control: switch
+      mb_reg_name: holding # input, holding
+      mb_reg_address: 17
+      mb_reg_type: bit
+      mb_decimals: 1
 influences: # параметры входных воздействий
   name: Параметры внешней среды
   values:
@@ -69,6 +75,10 @@ influences: # параметры входных воздействий
       ws_regexp: null
       ws_value: 0
       ws_control: readonly
+      mb_reg_name: null # input, holding
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: 0
 comments: # комментарий к эксперименту
   name: Комментарии к эксперименту
   values:
@@ -77,3 +87,4 @@ comments: # комментарий к эксперименту
       ws_regexp: ^(?!.*краткий\sкомментарий).*
       ws_value: краткий комментарий
       ws_control: field
+      ws_dimension:

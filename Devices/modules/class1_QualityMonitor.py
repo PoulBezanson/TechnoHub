@@ -87,7 +87,7 @@ class Device:
 		      f'[{self.init_controller.__name__}]:')
 		
 		# чтение файла сетевой конфигурации .yaml и идентификация установки
-		connections_config=self.read_connections_config()
+		connections_config=self.read_yaml_file(self.connections_config_file)
 		self.device_identifiers=connections_config['device_identifiers']
 		
 		# открытие соединения с базой данных сервера
@@ -192,42 +192,18 @@ class Device:
 		'''
 		return self.status_dictionary
 	
-	def read_connections_config(self):
+	def read_yaml_file(self, file_name):
 		'''
-		Прочитать файл с параметрами соединений 
+		Прочитать файл в формате .yaml
 		'''
 		try:
-			with open(self.connections_config_file, 'r') as file:
+			with open(file_name, 'r') as file:
 				result=yaml.safe_load(file)
-				print('\t','[ОК!] Connection config file read')
+				print(f'\t [ОК!] File {file_name} has been read')
 			return result
 		except:
-			print('\t','[FAULT!] Connection config file NOT read')
+			print('\t','[FAULT!] File {file_name} has NOT been read')
 			
-	def read_experiment_manifest(self):
-		'''
-		Прочитать файл с параметрами эксперимента 
-		'''
-		try:
-			with open(self.experiment_manifest_file, 'r') as file:
-				result=yaml.safe_load(file)
-				print('\t','[ОК!] Experiment_manifest file read')
-			return result
-		except:
-			print('\t','[FAULT!] Experiment_manifest file NOT read')
-	
-	def read_options_manifest(self):
-		'''
-		Прочитать файл с параметрами модели 
-		'''
-		try:
-			with open(self.options_manifest_file, 'r') as file:
-				result=yaml.safe_load(file)
-				print('\t','[ОК!] Options manifest file read')
-			return result
-		except:
-			print('\t','[FAULT!] Options manifest file NOT read')
-	
 	def read_results_manifest(self):
 		'''
 		Прочитать файл с параметрами разультирующего вектора 
@@ -260,14 +236,14 @@ class Device:
 		
 		# !!! нужно добавить try 
 		
-		# чтение файла манифеста параметров модели
-		experiment_manifest=self.read_experiment_manifest()
+		# чтение файла манифеста параметров эксперимента
+		experiment_manifest=self.read_yaml_file(self.experiment_manifest_file)
 				
 		# чтение файла манифеста параметров модели
-		options_manifest=self.read_options_manifest()
+		options_manifest=self.read_yaml_file(self.options_manifest_file)
 				
 		# чтение атрибутов манифеста выходных данных
-		results_manifest=self.read_results_manifest()
+		results_manifest=self.read_yaml_file(self.results_manifest_file)
 					
 		# подготовка данных манифестов для обновления
 		if experiment_manifest['time_update']==options_manifest['time_update'] and \
@@ -315,12 +291,12 @@ class Device:
 			print(f'\t [FAULT!] STOP controller on stage 1')
 			sys.exit()
 				
-	def up_init_connection(self):
+	def set_modbus_connection(self):
 		'''
-		Инициировать соединение с объектом управления. Оценить скорость чтения вектора выходных данных  
+		Инициировать соединение с объектом управления. Оценить скорость чтения вектора выходных данных
 		'''
-		# открытие соединения с промышленной шиной
-		connections_config=self.read_connections_config()
+		# открытие соединения с промышленной шиной на основе ранее прочитанных данных connection_config.yaml
+		connections_config=self.read_yaml_file(self.connections_config_file)
 		self.bus_config=connections_config['modbus_config']
 		try:
 			self.dv_connection=minimalmodbus.Instrument(self.bus_config['port_name'],\
@@ -333,49 +309,104 @@ class Device:
 			self.dv_connection.clear_buffers_before_each_transaction = True
 		except:
 			print('\t','[FAULT!] NO divice connection by modbus')
+			push_status_device("Stage 1: NO divice connection by modbus", 'offline')
+			print(f'\t [OK!] Stop controller')
 			sys.exit() 
 		else:
 			print('\t','[OK!] Connected to device by modbus')
 		
-		# чтение манифеста параметров выходных данных 
-		results_manifest=self.read_results_manifest()
+		
+	def get_args_dataset(self, md_reg_name='input'):
+		'''
+		Сформировать словарь аргументов для команды modbus считывания вектора выходных данных из input регистров 
+		'''
+		args_dataset_command={}
+		# чтение манифеста параметров выходных данных - result_manifest.yaml
+		results_manifest=self.read_yaml_file(self.results_manifest_file)
 		dataset_options=results_manifest['dataset_options']
 		values=dataset_options['values']
 		
-		# формировние словаря имен регистров указанием самого младшего адреса  
-		registers_dict_min={}
+		# формировние словаря диапазона адресов input регистров 
+		# формируется только один диапазон не битовых регистров для считывания
+		min_max_registers={'min':65535,'max':0}
 		for k, v in values.items():
-			if v['mb_reg_name']!=None and not (v['mb_reg_name'] in registers_dict_min):
-				registers_dict_min[v['mb_reg_name']]=v['mb_reg_address']
-			elif v['mb_reg_name']!=None and v['mb_reg_address']<registers_dict_min[v['mb_reg_name']]:
-				registers_dict[v['mb_reg_name']]=v['mb_reg_address']
-		print(f'\t [OK!] Created a list of registers: {registers_dict_min}')
+			if v['mb_reg_type']!='bit' and v['mb_reg_name']==md_reg_name:
+				if v['mb_reg_address']<min_max_registers['min']:
+					min_max_registers['min']=v['mb_reg_address']
+				if v['mb_reg_address']>min_max_registers['max']:
+					min_max_registers['max']=v['mb_reg_address']
+		print(f'\t [OK!] Created a list of MIN/MAX address: {min_max_registers}')
 		#!!! нужно предусмотреть проверку правильности инеми регистров
 		
-		# формировние словаря имен регистров указанием самого старшего адреса  
-		registers_dict_max={}
-		for k, v in values.items():
-			if v['mb_reg_name']!=None and not (v['mb_reg_name'] in registers_dict_max):
-				registers_dict_max[v['mb_reg_name']]=v['mb_reg_address']
-			elif v['mb_reg_name']!=None and v['mb_reg_address']>registers_dict_max[v['mb_reg_name']]:
-				registers_dict_max[v['mb_reg_name']]=v['mb_reg_address']
-		print(f'\t [OK!] Created a list of registers: {registers_dict_max}')
-		#!!! нужно предусмотреть проверку правильности инеми регистров
+		# формирование словаря аргументов modbus функции для группового считывания выходных регистров данных
+		function_code = 4
+		address=min_max_registers['min']
+		number=min_max_registers['max']-min_max_registers['min']+1
+		args_dataset_command={'registeraddress': address, 'number_of_registers': number,  'functioncode': function_code}
+		print(f'\t [OK!] Created a list of argumentes: {args_dataset_command}')
+		return args_dataset_command
 		
-		# формирование команд 
-		dataset_vector=[]
-		for k, v in registers_dict_min.items():
-			register_address=v
-			number_of_registers=registers_dict_max[k]-registers_dict_min[k]+1
-			if k=='input':
-				function_code=4
-			if k=='holding':
-				function_code=3
-			dataset_vector=dataset_vector+self.dv_connection.read_registers(register_address,\
-											number_of_registers,\
-											function_code)
-		print(f'\t [OK!] Dataset vector read: {dataset_vector}')
-		return 0
+	def get_mb_initial_commands(self):
+		'''
+		Сформировать словарь параметров modbus команд для считывания вектора начального состояния 
+		'''
+		mb_initial_commands={}
+				
+		# чтение манифеста параметров модели - options_manifest.yaml
+		options_manifest=self.read_yaml_file(options_manifest_file)
+		initial_state=options_manifest['initial state']
+		values=initial_state['values']
+		
+		# формирование словаря modbus команд для считывания регистров начального состояния
+		initial_mb_commands={}
+		for k, v in values.items():
+			if v['mb_reg_type']!='bit' and v['mb_reg_name']!=None:
+				address_of_holdings=v
+				number=registers_dict_max[k]-registers_dict_min[k]+1
+				initial_mb_commands[k]={registeraddress: address, number_of_registers: number,  functioncode: fuction_read_codes[k]}
+		
+		return mb_initial_commands
+	
+	def up_dataset_vector(self):
+		#!!! сделать выполнение команды через try
+		'''
+		Считать с объекта вектор выходных параметров
+		'''	
+		# формирование аргументов modbus функции чтения input регистров
+		args=self.get_args_dataset(md_reg_name='input')
+		address=args['registeraddress']
+		number=args['number_of_registers']
+		code=args['functioncode']
+		# чтение манифеста параметров выходных данных - result_manifest.yaml
+		results_manifest=self.read_yaml_file(self.options_manifest_file)
+		dataset_options=results_manifest['time_options']
+		values=dataset_options['values']
+		delta_time=values['delta_time']['ws_value']
+		# формирование выходного вектора
+		time_start=dt.datetime.now().timestamp()			
+		dataset_vector=self.dv_connection.read_registers(registeraddress=address,\
+														number_of_registers=number,\
+														functioncode=code)	
+		time_reading=dt.datetime.now().timestamp()-time_start			
+		dataset_vector=[time_start]+[time_reading]+dataset_vector
+		print(f'\t [OK!] Dataset vector read:\n'
+			  f'\t {dataset_vector}')
+		if time_reading<delta_time:
+			print(f'\t [OK!] Time_reading={time_reading} (<{delta_time})')
+		else:
+			print(f'\t [FAULT!] Time_reading={time_reading} (>={delta_time})')
+			time.sleep(1)
+			self.push_status_device("Stage 1: Dataset vector time reading is not correct",'offline')
+			print(f'\t [OK!] Stop controller')
+			sys.exit()      
+		return dataset_vector
+	
+	def __del__(self):
+		'''
+		Деструктор 
+		'''
+		print(f'\t [OK!] Stop controller')
+	
 		
 def scan_keyboard(_device):
 	'''
