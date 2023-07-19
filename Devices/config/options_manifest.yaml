@@ -1,4 +1,4 @@
-time_update: 1689599591 # время модификации в формате TIMESTEMP
+time_update: 1689677509 # время модификации в формате TIMESTEMP
 time_options: # временные параметры эксперимента
   name: Временные параметры
   values: 
@@ -14,7 +14,7 @@ time_options: # временные параметры эксперимента
       ws_dimension: сек
       ws_type: float
       ws_regexp: null
-      ws_value: 0.01
+      ws_value: 0.1
       ws_control: readonly
     scale_time:
       ws_name: масштаб времени

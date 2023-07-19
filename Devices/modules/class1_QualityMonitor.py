@@ -34,28 +34,18 @@ class Device:
 	'''
 	
 	def test(self):
-		# запись данных в базу данных
+		_selection=[]
 		db_cursor=self.db_connection.cursor()
-		db_cursor.callproc("push_manifests_",[])
+		db_cursor.callproc("push_reserve_claims",['8804b613', 6])
 		self.db_connection.commit()
 		# обработка ответа базы данных
 		_response = []
 		for s in db_cursor.stored_results():
 			_response.append(s.fetchall())
-		response=_response[0][0][0]
+		db_response=_response[0][0][0]
 		db_cursor.close()
-		#response=response.strip()
-		string_r='[ОК!] Data written to the database'
-		string_m='[OK!] Data written to the database'
-		print(f'String_r={string_r}')
-		print(f'String_m={string_m}')
-		print(f'Responce={response}')
-		if 'OK!' in response:
-			print("Блять!!!")
+		print(db_response)
 		
-		for i in range(0,len(response)):
-			if response[i:i+1]==string_m[i:i+1]:
-				print(string_r[i:i+1], end='')
 		sys.exit()
 	
 	def __init__(self):
@@ -64,8 +54,11 @@ class Device:
 		'''
 		self.connections_config_file='./config/connections_config.yaml' # файл сетевой конфигурации
 		self.experiment_manifest_file='./config/experiment_manifest.yaml' # файл общей конфигурации эксперимента
+		self.experiment_manifest=None   # структура данных манифеста эксперимента 
 		self.options_manifest_file='./config/options_manifest.yaml' # файл общей конфигурации эксперимента
+		self.options_manifest=None      # структура данных манифеста параметров 
 		self.results_manifest_file='./config/results_manifest.yaml' # файл общей конфигурации эксперимента
+		self.results_manifest=None      # структура данных результатов эксперимента
 		self.device_identifiers=None	# идентификаторы экспериментальной установки
 		self.db_config=None				# параметры входа в базу данных
 		self.db_connection=None			# коннектор базы данных
@@ -87,7 +80,7 @@ class Device:
 		      f'[{self.init_controller.__name__}]:')
 		
 		# чтение файла сетевой конфигурации .yaml и идентификация установки
-		connections_config=self.read_yaml_file(self.connections_config_file)
+		connections_config=self._read_yaml_file(self.connections_config_file)
 		self.device_identifiers=connections_config['device_identifiers']
 		
 		# открытие соединения с базой данных сервера
@@ -103,7 +96,7 @@ class Device:
 			print('\t','[FAULT!] No database connection')
 			sys.exit()
 		
-		# формирование из базы данных список режимов контроллера
+		# формирование режимов контроллера из базы данных список 
 		db_cursor=self.db_connection.cursor()
 		db_cursor.callproc("pull_status_list",[])
 		_selection = []
@@ -115,7 +108,12 @@ class Device:
 		for s in _selection:
 			self.status_dictionary[s[0]]=s[1]
 					
-		# Аутентификация названия установки
+		# чтение файлов манифестов
+		self.experiment_manifest=self._read_yaml_file(self.experiment_manifest_file)
+		self.options_manifest=self._read_yaml_file(self.options_manifest_file)
+		self.results_manifest=self._read_yaml_file(self.results_manifest_file)
+			
+		# аутентификация названия установки
 		db_cursor=self.db_connection.cursor()
 		# TO DO:
 		db_cursor.close()
@@ -146,7 +144,8 @@ class Device:
 		routin_parameters=[self.device_identifiers['hash_key'],_status,_description]
 		db_cursor.callproc("push_status_device",routin_parameters)
 		self.db_connection.commit()
-		print(f'\t [ОК!] New status with description sent to database.')
+		print(f'\t [ОК!] New status "{_status}" sent to database with description:\n'
+			  f'\t       {_description}')
 		db_cursor.close()
 		return 0
 	
@@ -192,7 +191,7 @@ class Device:
 		'''
 		return self.status_dictionary
 	
-	def read_yaml_file(self, file_name):
+	def _read_yaml_file(self, file_name):
 		'''
 		Прочитать файл в формате .yaml
 		'''
@@ -202,7 +201,7 @@ class Device:
 				print(f'\t [ОК!] File {file_name} has been read')
 			return result
 		except:
-			print('\t','[FAULT!] File {file_name} has NOT been read')
+			print(f'\t [FAULT!] File {file_name} has NOT been read')
 			
 	def read_results_manifest(self):
 		'''
@@ -235,39 +234,32 @@ class Device:
 		# чтение файла манифеста эксперимента
 		
 		# !!! нужно добавить try 
-		
-		# чтение файла манифеста параметров эксперимента
-		experiment_manifest=self.read_yaml_file(self.experiment_manifest_file)
-				
-		# чтение файла манифеста параметров модели
-		options_manifest=self.read_yaml_file(self.options_manifest_file)
-				
-		# чтение атрибутов манифеста выходных данных
-		results_manifest=self.read_yaml_file(self.results_manifest_file)
-					
+							
 		# подготовка данных манифестов для обновления
-		if experiment_manifest['time_update']==options_manifest['time_update'] and \
-			experiment_manifest['time_update']==results_manifest['time_update']:
+		if self.experiment_manifest['time_update']==self.options_manifest['time_update'] and \
+			self.experiment_manifest['time_update']==self.results_manifest['time_update']:
 			routin_parameters=[]
-			routin_parameters.append(experiment_manifest['time_update'])
+			routin_parameters.append(self.experiment_manifest['time_update'])
 			routin_parameters.append(self.device_identifiers['hash_key'])
-			routin_parameters.append(experiment_manifest['name'])
-			routin_parameters.append(experiment_manifest['experiment_type'])
-			routin_parameters.append(experiment_manifest['description'])
-			routin_parameters.append(experiment_manifest['full_description'])
-			del options_manifest['time_update']
-			json_options_manifest = json.dumps(options_manifest)
+			routin_parameters.append(self.experiment_manifest['name'])
+			routin_parameters.append(self.experiment_manifest['experiment_type'])
+			routin_parameters.append(self.experiment_manifest['description'])
+			routin_parameters.append(self.experiment_manifest['full_description'])
+			del_options_manifest=self.options_manifest
+			del del_options_manifest['time_update']
+			json_options_manifest = json.dumps(del_options_manifest)
 			routin_parameters.append(json_options_manifest)
-			del results_manifest['time_update']
-			json_results_manifest = json.dumps(results_manifest)
+			del_results_manifest=self.results_manifest
+			del del_results_manifest['time_update']
+			json_results_manifest = json.dumps(del_results_manifest)
 			routin_parameters.append(json_results_manifest)
 			tags=''
-			for tag in 	experiment_manifest['tags']:
+			for tag in 	self.experiment_manifest['tags']:
 				tags=tags+'#'+tag
 			routin_parameters.append(tags)
-			routin_parameters.append(experiment_manifest['owner'])
-			routin_parameters.append(experiment_manifest['address'])
-			routin_parameters.append(experiment_manifest['contacts'])
+			routin_parameters.append(self.experiment_manifest['owner'])
+			routin_parameters.append(self.experiment_manifest['address'])
+			routin_parameters.append(self.experiment_manifest['contacts'])
 			print('\t','[ОК!] Data for database prepared')	
 			#!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			# запись данных в базу данных
@@ -290,13 +282,35 @@ class Device:
 			print(f'\t [FAULT!] Status NOT updated')
 			print(f'\t [FAULT!] STOP controller on stage 1')
 			sys.exit()
-				
+	
+	def push_reserve_claims(self):
+		'''
+		Зарезервировать пакет заявок для занавесок
+		'''
+		# формирование списка параметров запроса 
+		hash_key=self.device_identifiers['hash_key']
+		service_options=self.experiment_manifest['service_options']
+		values=service_options['values']
+		max_reserved_claims=values['max_reserved_claims']['value']
+		# запрос на резервирование заявок
+		_selection=[]
+		db_cursor=self.db_connection.cursor()
+		db_cursor.callproc("push_reserve_claims",[hash_key, max_reserved_claims])
+		self.db_connection.commit()
+		# обработка ответа базы данных
+		_response = []
+		for s in db_cursor.stored_results():
+			_response.append(s.fetchall())
+		db_response=_response[0][0][0]
+		db_cursor.close()
+		print(f'\t [OK!] {db_response} claims reserved')
+							
 	def set_modbus_connection(self):
 		'''
 		Инициировать соединение с объектом управления. Оценить скорость чтения вектора выходных данных
 		'''
 		# открытие соединения с промышленной шиной на основе ранее прочитанных данных connection_config.yaml
-		connections_config=self.read_yaml_file(self.connections_config_file)
+		connections_config=self._read_yaml_file(self.connections_config_file)
 		self.bus_config=connections_config['modbus_config']
 		try:
 			self.dv_connection=minimalmodbus.Instrument(self.bus_config['port_name'],\
@@ -309,21 +323,21 @@ class Device:
 			self.dv_connection.clear_buffers_before_each_transaction = True
 		except:
 			print('\t','[FAULT!] NO divice connection by modbus')
-			push_status_device("Stage 1: NO divice connection by modbus", 'offline')
+			self.keyboard_value='offline'
+			self.push_status_device("Stage 1: NO divice connection by modbus", self.keyboard_value)
 			print(f'\t [OK!] Stop controller')
 			sys.exit() 
 		else:
 			print('\t','[OK!] Connected to device by modbus')
 		
 		
-	def get_args_dataset(self, md_reg_name='input'):
+	def _get_args_dataset(self, md_reg_name='input'):
 		'''
 		Сформировать словарь аргументов для команды modbus считывания вектора выходных данных из input регистров 
 		'''
 		args_dataset_command={}
-		# чтение манифеста параметров выходных данных - result_manifest.yaml
-		results_manifest=self.read_yaml_file(self.results_manifest_file)
-		dataset_options=results_manifest['dataset_options']
+		# формирование параметров выходных данных - result_manifest.yaml
+		dataset_options=self.results_manifest['dataset_options']
 		values=dataset_options['values']
 		
 		# формировние словаря диапазона адресов input регистров 
@@ -343,7 +357,8 @@ class Device:
 		address=min_max_registers['min']
 		number=min_max_registers['max']-min_max_registers['min']+1
 		args_dataset_command={'registeraddress': address, 'number_of_registers': number,  'functioncode': function_code}
-		print(f'\t [OK!] Created a list of argumentes: {args_dataset_command}')
+		print(f'\t [OK!] Created a list of argumentes:\n'
+		      f'\t       {args_dataset_command}')
 		return args_dataset_command
 		
 	def get_mb_initial_commands(self):
@@ -352,9 +367,8 @@ class Device:
 		'''
 		mb_initial_commands={}
 				
-		# чтение манифеста параметров модели - options_manifest.yaml
-		options_manifest=self.read_yaml_file(options_manifest_file)
-		initial_state=options_manifest['initial state']
+		# формирование значений манифеста параметров модели - options_manifest.yaml
+		initial_state=self.options_manifest['initial state']
 		values=initial_state['values']
 		
 		# формирование словаря modbus команд для считывания регистров начального состояния
@@ -373,30 +387,43 @@ class Device:
 		Считать с объекта вектор выходных параметров
 		'''	
 		# формирование аргументов modbus функции чтения input регистров
-		args=self.get_args_dataset(md_reg_name='input')
+		args=self._get_args_dataset(md_reg_name='input')
 		address=args['registeraddress']
 		number=args['number_of_registers']
 		code=args['functioncode']
-		# чтение манифеста параметров выходных данных - result_manifest.yaml
-		results_manifest=self.read_yaml_file(self.options_manifest_file)
-		dataset_options=results_manifest['time_options']
+		# чтение манифеста параметров эксперимента - options_manifest.yaml
+		dataset_options=self.options_manifest['time_options']
 		values=dataset_options['values']
 		delta_time=values['delta_time']['ws_value']
 		# формирование выходного вектора
 		time_start=dt.datetime.now().timestamp()			
-		dataset_vector=self.dv_connection.read_registers(registeraddress=address,\
-														number_of_registers=number,\
-														functioncode=code)	
+		try:
+			dataset_vector=self.dv_connection.read_registers(registeraddress=address,\
+															number_of_registers=number,\
+															functioncode=code)	
+		except:
+			description='Dataset vector NOT read by modbus'
+			self.keyboard_value='offline'
+			print(f'\t [FAULT!] {description}')
+			time.sleep(1)
+			self.push_status_device("Stage 1: " + description,self.keyboard_value)
+			print(f'\t [OK!] Stop controller')
+			sys.exit()   
+		# формирование время опроса вектора
 		time_reading=dt.datetime.now().timestamp()-time_start			
 		dataset_vector=[time_start]+[time_reading]+dataset_vector
 		print(f'\t [OK!] Dataset vector read:\n'
 			  f'\t {dataset_vector}')
+		# обработке ошибок на основе временных праметров эксперимента
 		if time_reading<delta_time:
-			print(f'\t [OK!] Time_reading={time_reading} (<{delta_time})')
+			description=f'Time_reading={time_reading} (<{delta_time})'
+			print(f'\t [OK!] {description}')
 		else:
-			print(f'\t [FAULT!] Time_reading={time_reading} (>={delta_time})')
+			description=f'Time_reading={time_reading} (>={delta_time}). It is NOT correct'
+			self.keyboard_value='offline'
+			print(f'\t [FAULT!] {description}')
 			time.sleep(1)
-			self.push_status_device("Stage 1: Dataset vector time reading is not correct",'offline')
+			self.push_status_device("Stage 1: {description}",self.keyboard_value)
 			print(f'\t [OK!] Stop controller')
 			sys.exit()      
 		return dataset_vector

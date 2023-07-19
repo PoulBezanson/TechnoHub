@@ -25,9 +25,7 @@ if __name__=="__main__":
 	
 	# тестировочный блок
 	#device.test()
-	#device.up_init_connection()
-	#sys.exit()
-	
+		
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 			f'[Запрос предыдущего статуса  контроллера]:\n'
 			f'\t [OK!] Waiting for pull previus status...')
@@ -85,9 +83,11 @@ if __name__=="__main__":
 	# вход в главный цикл
 	while device.get_status_id(device.get_keyboard_value()) == 1 or \
 				device.get_status_id(device.get_keyboard_value()) ==  3:
+		device.push_reserve_claims()
+		time.sleep(1)
 		continue
 	device.push_status_device('Status was confirmed at initialization',device.get_keyboard_value())
 	device.set_status_device(device.pull_status_device())	
-	
+	print(f'\t [OK!] Stop controller')
 	
 	
