@@ -24,7 +24,8 @@ if __name__=="__main__":
 	device=dv.Device()
 	
 	# тестировочный блок
-	#device.test()
+	print('Запуск теста')
+	device.test()
 		
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 			f'[Запрос предыдущего статуса  контроллера]:\n'
@@ -49,7 +50,7 @@ if __name__=="__main__":
 	keyboard_status_id=device.get_status_id(device.get_keyboard_value())
 		# обновление манифестов при смене статуса "modification" на "online" или "offline" 
 	if previus_status_id==3 and (keyboard_status_id==1 or keyboard_status_id==2):
-		device.push_manifests();
+		device.push_all_manifests();
 		print(f'\t [OK!] Manifest file updated')
 	else:
 		print(f'\t [OK!] Manifest file update is not required')

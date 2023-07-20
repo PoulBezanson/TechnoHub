@@ -34,18 +34,8 @@ class Device:
 	'''
 	
 	def test(self):
-		_selection=[]
-		db_cursor=self.db_connection.cursor()
-		db_cursor.callproc("push_reserve_claims",['8804b613', 6])
-		self.db_connection.commit()
-		# обработка ответа базы данных
-		_response = []
-		for s in db_cursor.stored_results():
-			_response.append(s.fetchall())
-		db_response=_response[0][0][0]
-		db_cursor.close()
-		print(db_response)
-		
+		self.push_all_manifests()
+		manifest=self._pull_one_manifest('experiment_manifest')
 		sys.exit()
 	
 	def __init__(self):
@@ -96,6 +86,12 @@ class Device:
 			print('\t','[FAULT!] No database connection')
 			sys.exit()
 		
+		# аутентификация названия установки
+		db_cursor=self.db_connection.cursor()
+		# TO DO:
+		db_cursor.close()
+		print('\t','[OK!] Authentication completed')
+		
 		# формирование режимов контроллера из базы данных список 
 		db_cursor=self.db_connection.cursor()
 		db_cursor.callproc("pull_status_list",[])
@@ -108,18 +104,11 @@ class Device:
 		for s in _selection:
 			self.status_dictionary[s[0]]=s[1]
 					
-		# чтение файлов манифестов
-		self.experiment_manifest=self._read_yaml_file(self.experiment_manifest_file)
-		self.options_manifest=self._read_yaml_file(self.options_manifest_file)
-		self.results_manifest=self._read_yaml_file(self.results_manifest_file)
-			
-		# аутентификация названия установки
-		db_cursor=self.db_connection.cursor()
-		# TO DO:
-		db_cursor.close()
-		print('\t','[OK!] Authentication completed')
-		
-		
+		# чтение манифестов из базы данных
+		self.experiment_manifest=self._pull_one_manifest('experiment_manifest')
+		self.options_manifest=self._pull_one_manifest('options_manifest')
+		self.results_manifest=self._pull_one_manifest('results_manifest')
+				
 	def pull_status_device(self):
 		'''
 		Запросить из базы данных статус установки 
@@ -135,6 +124,27 @@ class Device:
 		      f'\t       Тime status: {datetime.utcfromtimestamp(int(status_device[1])).strftime("%Y-%m-%d %H:%M")}.\n' 
 		      f'\t       Description: {status_device[2]}')
 		return status_device
+	
+	def _pull_one_manifest(self, _manifest_name):
+		'''
+		Считать с базы данных содержимое манифеста
+		'''
+		# считывание json объекта манифеста с базы данных
+		db_cursor=self.db_connection.cursor()
+		db_cursor.callproc("pull_one_manifest",[self.device_identifiers['hash_key'], _manifest_name])
+		_response = []
+		for s in db_cursor.stored_results():
+			_response.append(s.fetchall())
+		json_manifest=_response[0][0][0]
+		db_cursor.close()
+		if '[FALSE!]' in json_manifest:
+			print(f'\t {json_manifest}')
+			sys.exit()
+		else:
+			print(f'\t [OK!] Manifest ({_manifest_name}) was read from database')
+		# преобразование json в структуру python 
+		manifest = json.loads(json_manifest)
+		return(manifest)
 		
 	def push_status_device(self, _description, _status):
 		'''
@@ -203,18 +213,6 @@ class Device:
 		except:
 			print(f'\t [FAULT!] File {file_name} has NOT been read')
 			
-	def read_results_manifest(self):
-		'''
-		Прочитать файл с параметрами разультирующего вектора 
-		'''
-		try:
-			with open(self.results_manifest_file, 'r') as file:
-				result = yaml.safe_load(file)
-				print('\t','[ОК!] Results manifest file read')
-			return result
-		except:
-			print('\t','[FAULT!] Results manifest file NOT read')
-		
 	def set_status_device(self, _new_status):
 		'''
 		Установить новый текущий статус 
@@ -227,7 +225,7 @@ class Device:
 		'''
 		self.previus_status=_new_status
 							                                 	
-	def push_manifests(self):
+	def push_all_manifests(self):
 		'''
 		Обновить данные в таблице "experiments" относящиеся к спецификации эксперимента.
 		'''
@@ -246,7 +244,7 @@ class Device:
 		routin_parameters.append(self.device_identifiers['hash_key'])
 		routin_parameters.append(json_experiment_manifest)
 		routin_parameters.append(json_options_manifest)
-		routin_parameters.append(results_manifest)
+		routin_parameters.append(json_results_manifest)
 				
 		# подгтовка параметров для обновления производных полей из experiment_manifest
 		routin_parameters.append(self.experiment_manifest['name'])
@@ -254,18 +252,19 @@ class Device:
 		routin_parameters.append(self.experiment_manifest['description'])
 		routin_parameters.append(self.experiment_manifest['full_description'])
 		tags=''
-		for tag in 	experiment_manifest['tags']:
 		for tag in 	self.experiment_manifest['tags']:
- 				tags=tags+'#'+tag
- 		routin_parameters.append(tags)
+			for tag in 	self.experiment_manifest['tags']:
+				tags=tags+'#'+tag
+		routin_parameters.append(tags)
 		routin_parameters.append(self.experiment_manifest['owner'])
 		routin_parameters.append(self.experiment_manifest['address'])
 		routin_parameters.append(self.experiment_manifest['contacts'])
- 		print('\t','[ОК!] Data for database prepared')
+		routin_parameters.append(0) # обновление поля date_update (0 -нет, 1 - да)
+		print(f'\t [ОК!] Data for database prepared')
 		
 		# запись данных в базу данных
 		db_cursor=self.db_connection.cursor()
-		db_cursor.callproc("push_manifests",routin_parameters)
+		db_cursor.callproc("push_all_manifests",routin_parameters)
 		self.db_connection.commit()
 		# обработка ответа базы данных
 		_response = []
@@ -274,10 +273,7 @@ class Device:
 		db_response=_response[0][0][0]
 		db_cursor.close()
 		print(f'\t {db_response}')
-		if 'OK!' in db_response:
-			return 0
-		else:
-			sys.exit()
+		
 	def push_reserve_claims(self):
 		'''
 		Зарезервировать пакет заявок для занавесок
