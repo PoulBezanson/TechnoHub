@@ -231,58 +231,53 @@ class Device:
 		'''
 		Обновить данные в таблице "experiments" относящиеся к спецификации эксперимента.
 		'''
-		# чтение файла манифеста эксперимента
+		# чтение файлов манифестов yaml
+		self.experiment_manifest=self._read_yaml_file(self.experiment_manifest_file)
+		self.options_manifest=self._read_yaml_file(self.options_manifest_file)
+		self.results_manifest=self._read_yaml_file(self.results_manifest_file)
 		
-		# !!! нужно добавить try 
-							
-		# подготовка данных манифестов для обновления
-		if self.experiment_manifest['time_update']==self.options_manifest['time_update'] and \
-			self.experiment_manifest['time_update']==self.results_manifest['time_update']:
-			routin_parameters=[]
-			routin_parameters.append(self.experiment_manifest['time_update'])
-			routin_parameters.append(self.device_identifiers['hash_key'])
-			routin_parameters.append(self.experiment_manifest['name'])
-			routin_parameters.append(self.experiment_manifest['experiment_type'])
-			routin_parameters.append(self.experiment_manifest['description'])
-			routin_parameters.append(self.experiment_manifest['full_description'])
-			del_options_manifest=self.options_manifest
-			del del_options_manifest['time_update']
-			json_options_manifest = json.dumps(del_options_manifest)
-			routin_parameters.append(json_options_manifest)
-			del_results_manifest=self.results_manifest
-			del del_results_manifest['time_update']
-			json_results_manifest = json.dumps(del_results_manifest)
-			routin_parameters.append(json_results_manifest)
-			tags=''
-			for tag in 	self.experiment_manifest['tags']:
-				tags=tags+'#'+tag
-			routin_parameters.append(tags)
-			routin_parameters.append(self.experiment_manifest['owner'])
-			routin_parameters.append(self.experiment_manifest['address'])
-			routin_parameters.append(self.experiment_manifest['contacts'])
-			print('\t','[ОК!] Data for database prepared')	
-			#!!!!!!!!!!!!!!!!!!!!!!!!!!!
-			# запись данных в базу данных
-			db_cursor=self.db_connection.cursor()
-			db_cursor.callproc("push_manifests",routin_parameters)
-			self.db_connection.commit()
-			# обработка ответа базы данных
-			_response = []
-			for s in db_cursor.stored_results():
-				_response.append(s.fetchall())
-			db_response=_response[0][0][0]
-			db_cursor.close()
-			print(f'\t {db_response}')
-			if 'OK!' in db_response:
-				return 0
-			else:
-				sys.exit()
+		# преобразование манифестов в json
+		json_experiment_manifest = json.dumps(self.experiment_manifest)
+		json_options_manifest = json.dumps(self.options_manifest)
+		json_results_manifest = json.dumps(self.results_manifest)
+											
+		# подготовка параметров для обновления манифестов в базе данных
+		routin_parameters=[]
+		routin_parameters.append(self.device_identifiers['hash_key'])
+		routin_parameters.append(json_experiment_manifest)
+		routin_parameters.append(json_options_manifest)
+		routin_parameters.append(results_manifest)
+				
+		# подгтовка параметров для обновления производных полей из experiment_manifest
+		routin_parameters.append(self.experiment_manifest['name'])
+		routin_parameters.append(self.experiment_manifest['experiment_type'])
+		routin_parameters.append(self.experiment_manifest['description'])
+		routin_parameters.append(self.experiment_manifest['full_description'])
+		tags=''
+		for tag in 	experiment_manifest['tags']:
+		for tag in 	self.experiment_manifest['tags']:
+ 				tags=tags+'#'+tag
+ 		routin_parameters.append(tags)
+		routin_parameters.append(self.experiment_manifest['owner'])
+		routin_parameters.append(self.experiment_manifest['address'])
+		routin_parameters.append(self.experiment_manifest['contacts'])
+ 		print('\t','[ОК!] Data for database prepared')
+		
+		# запись данных в базу данных
+		db_cursor=self.db_connection.cursor()
+		db_cursor.callproc("push_manifests",routin_parameters)
+		self.db_connection.commit()
+		# обработка ответа базы данных
+		_response = []
+		for s in db_cursor.stored_results():
+			_response.append(s.fetchall())
+		db_response=_response[0][0][0]
+		db_cursor.close()
+		print(f'\t {db_response}')
+		if 'OK!' in db_response:
+			return 0
 		else:
-			print(f'\t [FAULT!] Times in manifest files are NOT equivalent')
-			print(f'\t [FAULT!] Status NOT updated')
-			print(f'\t [FAULT!] STOP controller on stage 1')
 			sys.exit()
-	
 	def push_reserve_claims(self):
 		'''
 		Зарезервировать пакет заявок для занавесок
