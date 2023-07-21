@@ -34,8 +34,6 @@ class Device:
 	'''
 	
 	def test(self):
-		self.push_all_manifests()
-		manifest=self._pull_one_manifest('experiment_manifest')
 		sys.exit()
 	
 	def __init__(self):
@@ -58,7 +56,7 @@ class Device:
 		self.previus_status=[] 			# предыдущий статус канала
 		self.keyboard_value='None'		# последнее набранное значение на клавиатуре
 		self.option_manifest=None    	# структура json со спецификациями эксперимента
-		
+		self.id_claim_fixed=None		# идентификатор зафиксированной заявки
 		self.status_dictionary=None   		# список возможных статусов
 		self.init_controller()			# вызов дополнительной процедуры инициализации
 	
@@ -282,9 +280,9 @@ class Device:
 		hash_key=self.device_identifiers['hash_key']
 		service_options=self.experiment_manifest['service_options']
 		values=service_options['values']
-		max_reserved_claims=values['max_reserved_claims']['value']
+		max_reserved_claims=values['max_reserved_claims']
+		max_reserved_claims=max_reserved_claims['value']
 		# запрос на резервирование заявок
-		_selection=[]
 		db_cursor=self.db_connection.cursor()
 		db_cursor.callproc("push_reserve_claims",[hash_key, max_reserved_claims])
 		self.db_connection.commit()
@@ -295,7 +293,24 @@ class Device:
 		db_response=_response[0][0][0]
 		db_cursor.close()
 		print(f'\t [OK!] {db_response} claims reserved')
-							
+		
+	def push_fix_claim(self):
+		'''
+		Фиксировать заявку среди зарезервироанных
+		Возвращает id_claim
+		'''
+		db_cursor=self.db_connection.cursor()
+		db_cursor.callproc("push_fix_claim",[self.device_identifiers['hash_key']])
+		self.db_connection.commit()
+		# обработка ответа базы данных
+		_response = []
+		for s in db_cursor.stored_results():
+			_response.append(s.fetchall())
+		db_cursor.close()
+		self.id_claim_fixed=_response[0][0][0]
+		print(f'\t [OK!] {self.id_claim_fixed}-th claim fixed')
+		return int(self.id_claim_fixed)
+									
 	def set_modbus_connection(self):
 		'''
 		Инициировать соединение с объектом управления. Оценить скорость чтения вектора выходных данных

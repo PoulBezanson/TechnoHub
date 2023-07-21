@@ -24,8 +24,8 @@ if __name__=="__main__":
 	device=dv.Device()
 	
 	# тестировочный блок
-	print('Запуск теста')
-	device.test()
+	#print('Запуск теста')
+	#device.test()
 		
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 			f'[Запрос предыдущего статуса  контроллера]:\n'
@@ -51,7 +51,6 @@ if __name__=="__main__":
 		# обновление манифестов при смене статуса "modification" на "online" или "offline" 
 	if previus_status_id==3 and (keyboard_status_id==1 or keyboard_status_id==2):
 		device.push_all_manifests();
-		print(f'\t [OK!] Manifest file updated')
 	else:
 		print(f'\t [OK!] Manifest file update is not required')
 		# удаление заявок при смене статуса на "disposal"
@@ -68,8 +67,9 @@ if __name__=="__main__":
 	
 	if device.get_status_device()[3] == 2 or device.get_status_device()[3] == 4:
 		del device
+		print(f'\t [OK!] Stop controller')
 		sys.exit()
-	
+	print(f'\t [OK!] Stop controller')
 	# проверка связи с экспериментальной установкой
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 		      f'[Установление связи с экспериментальной установкой]:')
@@ -85,9 +85,17 @@ if __name__=="__main__":
 	while device.get_status_id(device.get_keyboard_value()) == 1 or \
 				device.get_status_id(device.get_keyboard_value()) ==  3:
 		device.push_reserve_claims()
+		
+		while device.push_fix_claim()!=0:
+			
+			# обработка заявки
+			time.sleep(1)
+			continue
+		
+		
 		time.sleep(1)
 		continue
-	device.push_status_device('Status was confirmed at initialization',device.get_keyboard_value())
+	device.push_status_device('The status was set in the main loop',device.get_keyboard_value())
 	device.set_status_device(device.pull_status_device())	
 	print(f'\t [OK!] Stop controller')
 	
