@@ -34,6 +34,7 @@ class Device:
 	'''
 	
 	def test(self):
+		self.push_unreserve_claims()
 		sys.exit()
 	
 	def __init__(self):
@@ -47,6 +48,7 @@ class Device:
 		self.options_manifest=None      # структура данных манифеста параметров 
 		self.results_manifest_file='./config/results_manifest.yaml' # файл общей конфигурации эксперимента
 		self.results_manifest=None      # структура данных результатов эксперимента
+		self.options_data=None			# структура со значениями данными для проведения эксперимента
 		self.device_identifiers=None	# идентификаторы экспериментальной установки
 		self.db_config=None				# параметры входа в базу данных
 		self.db_connection=None			# коннектор базы данных
@@ -56,21 +58,23 @@ class Device:
 		self.previus_status=[] 			# предыдущий статус канала
 		self.keyboard_value='None'		# последнее набранное значение на клавиатуре
 		self.option_manifest=None    	# структура json со спецификациями эксперимента
-		self.id_claim_fixed=None		# идентификатор зафиксированной заявки
+		self.fix_claim_id=0				# идентификатор зафиксированной заявки
 		self.status_dictionary=None   		# список возможных статусов
 		self.init_controller()			# вызов дополнительной процедуры инициализации
+		
 	
 	def init_controller(self):
 		'''
 		Инициализировать контроллер эксперимента
 		'''
 		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[{self.init_controller.__name__}]:')
-		
+			f'[Controller Initialization...]:\n'
+			f'\t [OK!] Waiting for pull previus status...')
+				
 		# чтение файла сетевой конфигурации .yaml и идентификация установки
 		connections_config=self._read_yaml_file(self.connections_config_file)
 		self.device_identifiers=connections_config['device_identifiers']
-		
+				
 		# открытие соединения с базой данных сервера
 		self.db_config=connections_config['db_config']
 		self.db_connection=mysql.connector.connect(
@@ -101,6 +105,9 @@ class Device:
 		self.status_dictionary={}
 		for s in _selection:
 			self.status_dictionary[s[0]]=s[1]
+		
+		# запрос последнего статуса  контроллера из базы данных
+		self.previus_status=self.pull_status_device()
 					
 		# чтение манифестов из базы данных
 		self.experiment_manifest=self._pull_one_manifest('experiment_manifest')
@@ -109,7 +116,8 @@ class Device:
 				
 	def pull_status_device(self):
 		'''
-		Запросить из базы данных статус установки 
+		Запросить из базы данных статус установки
+		Возвращает: список [status_name, time, description, id_satus]
 		'''
 		db_cursor=self.db_connection.cursor()
 		db_cursor.callproc("pull_status_device",[self.device_identifiers['hash_key']])
@@ -122,12 +130,28 @@ class Device:
 		      f'\t       Тime status: {datetime.utcfromtimestamp(int(status_device[1])).strftime("%Y-%m-%d %H:%M")}.\n' 
 		      f'\t       Description: {status_device[2]}')
 		return status_device
-	
+		
+	def pull_options_data(self):
+		'''
+		Считать с базы данные параметров эксперимента
+		'''
+		# считывание json объект с базы данных
+		db_cursor=self.db_connection.cursor()
+		db_cursor.callproc("pull_options_data",[self.fix_claim_id])
+		_response = []
+		for s in db_cursor.stored_results():
+			_response.append(s.fetchall())
+		json_data=_response[0][0][0]
+		db_cursor.close()
+		self.options_data = json.loads(json_data)
+		print(f'\t [OK!] Options data was read from database')
+		return(self.options_data)
+			
 	def _pull_one_manifest(self, _manifest_name):
 		'''
-		Считать с базы данных содержимое манифеста
+		Считать с базы данных содержимое одного манифеста
 		'''
-		# считывание json объекта манифеста с базы данных
+		# считывание json объект манифеста с базы данных
 		db_cursor=self.db_connection.cursor()
 		db_cursor.callproc("pull_one_manifest",[self.device_identifiers['hash_key'], _manifest_name])
 		_response = []
@@ -160,14 +184,36 @@ class Device:
 	def push_delete_claims(self):
 		'''
 		Записать в базу данных статус установки
+		Возвращает: количество удаленных заявок
 		'''
 		db_cursor=self.db_connection.cursor()
 		routin_parameters=[self.device_identifiers['hash_key']]
 		db_cursor.callproc("push_delete_claims",routin_parameters)
 		self.db_connection.commit()
-		print(f'\t [ОК!] New status with description sent to database.')
+		_response = []
+		for s in db_cursor.stored_results():
+			_response.append(s.fetchall())
+		deleted_claims=_response[0][0][0]
 		db_cursor.close()
-		return 0
+		print(f'\t [ОК!] Claims deleted in the amount of {deleted_claims} pieces')
+		return deleted_claims
+	
+	def push_unreserve_claims(self):
+		'''
+		Разрезервировать заявки
+		Возвращает: количество разрезервированных заявок
+		'''
+		db_cursor=self.db_connection.cursor()
+		routin_parameters=[self.device_identifiers['hash_key']]
+		db_cursor.callproc("push_unreserve_claims",routin_parameters)
+		self.db_connection.commit()
+		_response = []
+		for s in db_cursor.stored_results():
+			_response.append(s.fetchall())
+		unreserved_claims=_response[0][0][0]
+		db_cursor.close()
+		print(f'\t [ОК!] Claims unreserved in the amount of {unreserved_claims} pieces')
+		return unreserved_claims
 		
 	def get_status_id(self,_status_name):
 		'''
@@ -280,8 +326,8 @@ class Device:
 		hash_key=self.device_identifiers['hash_key']
 		service_options=self.experiment_manifest['service_options']
 		values=service_options['values']
-		max_reserved_claims=values['max_reserved_claims']
-		max_reserved_claims=max_reserved_claims['value']
+		max_reserved_claims_values=values['max_reserved_claims']
+		max_reserved_claims=max_reserved_claims_values['value']
 		# запрос на резервирование заявок
 		db_cursor=self.db_connection.cursor()
 		db_cursor.callproc("push_reserve_claims",[hash_key, max_reserved_claims])
@@ -307,10 +353,27 @@ class Device:
 		for s in db_cursor.stored_results():
 			_response.append(s.fetchall())
 		db_cursor.close()
-		self.id_claim_fixed=_response[0][0][0]
-		print(f'\t [OK!] {self.id_claim_fixed}-th claim fixed')
-		return int(self.id_claim_fixed)
-									
+		self.fix_claim_id=_response[0][0][0]
+		print(f'\t [OK!] {self.fix_claim_id}-th claim fixed')
+		return int(self.fix_claim_id)
+	
+	def push_unfix_claim(self):
+		'''
+		Фиксировать заявку среди зарезервироанных
+		Возвращает id_claim
+		'''
+		db_cursor=self.db_connection.cursor()
+		routin_parameters=[self.device_identifiers['hash_key']]
+		db_cursor.callproc("push_unfix_claim",routin_parameters)
+		self.db_connection.commit()
+		_response = []
+		for s in db_cursor.stored_results():
+			_response.append(s.fetchall())
+		unfixed_claims=_response[0][0][0]
+		db_cursor.close()
+		print(f'\t [ОК!] Claims unfixed in the amount of {unfixed_claims} pieces')
+		return unfixed_claims
+										
 	def set_modbus_connection(self):
 		'''
 		Инициировать соединение с объектом управления. Оценить скорость чтения вектора выходных данных
@@ -445,12 +508,16 @@ def scan_keyboard(_device):
 	'''
 	Реализует фоновый опрос клавиатуры на предмет ввода режима 
 	'''
+	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
+		      f'[Launching the Keyboard Scanne...]')
 	# Получаем текущие настройки терминала
 	old_settings = termios.tcgetattr(sys.stdin)
 	# выводим на экран список доступных режимов
 	print('\t Enter key: ',end='')
-	print(f'{_device.get_status_dictionary().keys()}')
-	
+	status_dictionary=_device.get_status_dictionary()
+	for key, value in status_dictionary.items():
+		print(f'"{key}" ', end='')
+	print('\n')
 	try:
 		# Устанавливаем необработанный (raw) режим терминала
 		tty.setcbreak(sys.stdin.fileno())

@@ -27,21 +27,12 @@ if __name__=="__main__":
 	#print('Запуск теста')
 	#device.test()
 		
-	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-			f'[Запрос предыдущего статуса  контроллера]:\n'
-			f'\t [OK!] Waiting for pull previus status...')
-	# запрос предыдущего статуса  контроллера
-	device.set_previus_status(device.pull_status_device())
-	
 	# запуск сканера клавиатуры и ожидание обновления статуса
-	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[Ожидание обновления статуса]:')
 	scan_keyboard_tread = threading.Thread(target=dv.scan_keyboard, args=(device,))
 	scan_keyboard_tread.daemon = True
 	scan_keyboard_tread.start()
 	while device.get_keyboard_value()=='None':
 		pass
-	
 	# выбор действия при различных статусах
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 		      f'[Обновление манифестов]:\n'
@@ -56,7 +47,7 @@ if __name__=="__main__":
 		# удаление заявок при смене статуса на "disposal"
 	if keyboard_status_id==4:
 		device.push_delete_claims()
-		print(f'\t [OK!] Claims have been deleted')
+		
 	
 	# обновление в базе данных подтвержденного статуса
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
@@ -89,7 +80,16 @@ if __name__=="__main__":
 		while device.push_fix_claim()!=0:
 			
 			# обработка заявки
-			time.sleep(1)
+			device.pull_options_data()
+			time.sleep(5)
+			
+			# обработка режима
+			if device.get_status_id(device.get_keyboard_value())==2:
+				device.push_unreserve_claims()
+				break
+			if device.get_status_id(device.get_keyboard_value())==4:
+				device.push_delete_claims()
+				break
 			continue
 		
 		
