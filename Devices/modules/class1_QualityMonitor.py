@@ -11,7 +11,7 @@
 
 import minimalmodbus # https://minimalmodbus.readthedocs.io/en/master/index.html
 import pandas as pd # https://pandas.pydata.org/pandas-docs/stable/index.html
-import yaml
+import yaml 		#https://habr.com/ru/articles/669684/
 import json
 import time
 import datetime as dt
@@ -34,7 +34,7 @@ class Device:
 	'''
 	
 	def test(self):
-		self.push_unreserve_claims()
+		
 		sys.exit()
 	
 	def __init__(self):
@@ -42,6 +42,7 @@ class Device:
 		Конструктор
 		'''
 		self.connections_config_file='./config/connections_config.yaml' # файл сетевой конфигурации
+		self.connections_config=None	# структура данных c с параметрами сетевой конфигурации 
 		self.experiment_manifest_file='./config/experiment_manifest.yaml' # файл общей конфигурации эксперимента
 		self.experiment_manifest=None   # структура данных манифеста эксперимента 
 		self.options_manifest_file='./config/options_manifest.yaml' # файл общей конфигурации эксперимента
@@ -55,7 +56,6 @@ class Device:
 		self.bus_config=None			# параметры соединения с промышленной шиной
 		self.dv_connection=None			# коннектор промышленной шины
 		self.status_device=[]    		# текущий статус установки
-		self.previus_status=[] 			# предыдущий статус канала
 		self.keyboard_value='None'		# последнее набранное значение на клавиатуре
 		self.option_manifest=None    	# структура json со спецификациями эксперимента
 		self.fix_claim_id=0				# идентификатор зафиксированной заявки
@@ -68,15 +68,14 @@ class Device:
 		Инициализировать контроллер эксперимента
 		'''
 		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-			f'[Controller Initialization...]:\n'
-			f'\t [OK!] Waiting for pull previus status...')
+			f'[Controller initialization...]:')
 				
 		# чтение файла сетевой конфигурации .yaml и идентификация установки
-		connections_config=self._read_yaml_file(self.connections_config_file)
-		self.device_identifiers=connections_config['device_identifiers']
+		self.connections_config=self._read_yaml_file(self.connections_config_file)
+		self.device_identifiers=self.connections_config['device_identifiers']
 				
 		# открытие соединения с базой данных сервера
-		self.db_config=connections_config['db_config']
+		self.db_config=self.connections_config['db_config']
 		self.db_connection=mysql.connector.connect(
 				host=self.db_config["host"],
 				user=self.db_config["user"],
@@ -94,7 +93,7 @@ class Device:
 		db_cursor.close()
 		print('\t','[OK!] Authentication completed')
 		
-		# формирование режимов контроллера из базы данных список 
+		# формирование словаря режимов контроллера из базы данных список [status_name: id_status]
 		db_cursor=self.db_connection.cursor()
 		db_cursor.callproc("pull_status_list",[])
 		_selection = []
@@ -105,9 +104,10 @@ class Device:
 		self.status_dictionary={}
 		for s in _selection:
 			self.status_dictionary[s[0]]=s[1]
+		print(f'\t [OK!] Status dictionary formed: {self.status_dictionary}')
 		
 		# запрос последнего статуса  контроллера из базы данных
-		self.previus_status=self.pull_status_device()
+		self.status_device=self.pull_status_device()
 					
 		# чтение манифестов из базы данных
 		self.experiment_manifest=self._pull_one_manifest('experiment_manifest')
@@ -146,7 +146,19 @@ class Device:
 		self.options_data = json.loads(json_data)
 		print(f'\t [OK!] Options data was read from database')
 		return(self.options_data)
-			
+	
+	def _pull_amount_notmodification(self):
+		'''
+		Вернуть количество установок находящихся в любом статусе кроме modification
+		Вызывается из push_all_manifest
+		'''
+		function_parameters=(self.device_identifiers['hash_key'],)
+		db_cursor=self.db_connection.cursor()
+		function = "SELECT pull_amount_notmodification(%s)"
+		result = db_cursor.execute(function, function_parameters)
+		amount_notmodification = db_cursor.fetchone()[0]
+		return amount_notmodification
+				
 	def _pull_one_manifest(self, _manifest_name):
 		'''
 		Считать с базы данных содержимое одного манифеста
@@ -227,12 +239,6 @@ class Device:
 		'''
 		return self.status_device
 		
-	def get_previus_status(self):
-		'''
-		Получить предыдущий статус контроллера 
-		'''
-		return self.previus_status
-		
 	def get_keyboard_value(self):
 		'''
 		Получить предыдущий статус контроллера 
@@ -245,78 +251,92 @@ class Device:
 		'''
 		return self.status_dictionary
 	
-	def _read_yaml_file(self, file_name):
+	def _read_yaml_file(self, _file_name):
 		'''
 		Прочитать файл в формате .yaml
 		'''
 		try:
-			with open(file_name, 'r') as file:
+			with open(_file_name, 'r') as file:
 				result=yaml.safe_load(file)
-				print(f'\t [ОК!] File {file_name} has been read')
+				print(f'\t [ОК!] File {_file_name} has been read')
 			return result
 		except:
-			print(f'\t [FAULT!] File {file_name} has NOT been read')
-			
+			print(f'\t [FAULT!] File {_file_name} has NOT been read')
+	
+	def _write_yaml_file(self, _file_name, _data):
+		'''
+		Записать данные файл в формате .yaml
+		'''
+		try:
+			with open(_file_name, 'w') as file:
+				yaml.safe_dump(_data,file, sort_keys=False, allow_unicode=True)
+				print(f'\t [ОК!] File {_file_name} has been written')
+		except:
+			print(f'\t [FAULT!] File {_file_name} has NOT been written')
+				
 	def set_status_device(self, _new_status):
 		'''
 		Установить новый текущий статус 
 		'''
 		self.status_device=_new_status
-	
-	def set_previus_status(self,_new_status):
-		'''
-		Установить новый текущий статус 
-		'''
-		self.previus_status=_new_status
-							                                 	
+	                                 	
 	def push_all_manifests(self):
 		'''
 		Обновить данные в таблице "experiments" относящиеся к спецификации эксперимента.
 		'''
-		# чтение файлов манифестов yaml
-		self.experiment_manifest=self._read_yaml_file(self.experiment_manifest_file)
-		self.options_manifest=self._read_yaml_file(self.options_manifest_file)
-		self.results_manifest=self._read_yaml_file(self.results_manifest_file)
-		
-		# преобразование манифестов в json
-		json_experiment_manifest = json.dumps(self.experiment_manifest)
-		json_options_manifest = json.dumps(self.options_manifest)
-		json_results_manifest = json.dumps(self.results_manifest)
-											
-		# подготовка параметров для обновления манифестов в базе данных
-		routin_parameters=[]
-		routin_parameters.append(self.device_identifiers['hash_key'])
-		routin_parameters.append(json_experiment_manifest)
-		routin_parameters.append(json_options_manifest)
-		routin_parameters.append(json_results_manifest)
-				
-		# подгтовка параметров для обновления производных полей из experiment_manifest
-		routin_parameters.append(self.experiment_manifest['name'])
-		routin_parameters.append(self.experiment_manifest['experiment_type'])
-		routin_parameters.append(self.experiment_manifest['description'])
-		routin_parameters.append(self.experiment_manifest['full_description'])
-		tags=''
-		for tag in 	self.experiment_manifest['tags']:
+		if self._pull_amount_notmodification()==0:
+			
+			# чтение файлов манифестов yaml
+			self.experiment_manifest=self._read_yaml_file(self.experiment_manifest_file)
+			self.options_manifest=self._read_yaml_file(self.options_manifest_file)
+			self.results_manifest=self._read_yaml_file(self.results_manifest_file)
+			
+			# преобразование манифестов в json
+			json_experiment_manifest = json.dumps(self.experiment_manifest)
+			json_options_manifest = json.dumps(self.options_manifest)
+			json_results_manifest = json.dumps(self.results_manifest)
+			print(f'\t [ОК!] Data converted to json format')
+												
+			# подготовка параметров для обновления манифестов в базе данных
+			routin_parameters=[]
+			routin_parameters.append(self.device_identifiers['hash_key'])
+			routin_parameters.append(json_experiment_manifest)
+			routin_parameters.append(json_options_manifest)
+			routin_parameters.append(json_results_manifest)
+					
+			# подготовка параметров для обновления производных полей из experiment_manifest
+			routin_parameters.append(self.experiment_manifest['name'])
+			routin_parameters.append(self.experiment_manifest['experiment_type'])
+			routin_parameters.append(self.experiment_manifest['description'])
+			routin_parameters.append(self.experiment_manifest['full_description'])
+			tags=''
 			for tag in 	self.experiment_manifest['tags']:
-				tags=tags+'#'+tag
-		routin_parameters.append(tags)
-		routin_parameters.append(self.experiment_manifest['owner'])
-		routin_parameters.append(self.experiment_manifest['address'])
-		routin_parameters.append(self.experiment_manifest['contacts'])
-		routin_parameters.append(0) # обновление поля date_update (0 -нет, 1 - да)
-		print(f'\t [ОК!] Data for database prepared')
-		
-		# запись данных в базу данных
-		db_cursor=self.db_connection.cursor()
-		db_cursor.callproc("push_all_manifests",routin_parameters)
-		self.db_connection.commit()
-		# обработка ответа базы данных
-		_response = []
-		for s in db_cursor.stored_results():
-			_response.append(s.fetchall())
-		db_response=_response[0][0][0]
-		db_cursor.close()
-		print(f'\t {db_response}')
+				for tag in 	self.experiment_manifest['tags']:
+					tags=tags+'#'+tag
+			routin_parameters.append(tags)
+			routin_parameters.append(self.experiment_manifest['owner'])
+			routin_parameters.append(self.experiment_manifest['address'])
+			routin_parameters.append(self.experiment_manifest['contacts'])
+			routin_parameters.append(0) # обновление поля date_update (0 -нет, 1 - да)
+			print(f'\t [ОК!] Data for database prepared')
+			
+			# запись данных в базу данных
+			db_cursor=self.db_connection.cursor()
+			db_cursor.callproc("push_all_manifests",routin_parameters)
+			self.db_connection.commit()
+			# обработка ответа базы данных
+			_response = []
+			for s in db_cursor.stored_results():
+				_response.append(s.fetchall())
+			db_response=_response[0][0][0]
+			db_cursor.close()
+			print(f'\t {db_response}')
+		else:	
+			# обновление файлов манифестов
+			self._write_yaml_file(self.experiment_manifest_file, self.experiment_manifest)
+			self._write_yaml_file(self.options_manifest_file, self.options_manifest)
+			self._write_yaml_file(self.results_manifest_file, self.results_manifest)
+			print(f'\t [ОК!] Manifest files updated on local machine')
 		
 	def push_reserve_claims(self):
 		'''
@@ -336,9 +356,15 @@ class Device:
 		_response = []
 		for s in db_cursor.stored_results():
 			_response.append(s.fetchall())
-		db_response=_response[0][0][0]
+		reserved_claims=_response[0][0][0]
 		db_cursor.close()
-		print(f'\t [OK!] {db_response} claims reserved')
+		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
+		      f'[{self.get_keyboard_value()}]:',end='')
+		if reserved_claims!=0:
+			print(f' {reserved_claims} claims reserved')
+		else:
+			print(f' {reserved_claims} claims reserved',end='\r')
+		return reserved_claims
 		
 	def push_fix_claim(self):
 		'''
@@ -354,7 +380,10 @@ class Device:
 			_response.append(s.fetchall())
 		db_cursor.close()
 		self.fix_claim_id=_response[0][0][0]
-		print(f'\t [OK!] {self.fix_claim_id}-th claim fixed')
+		if int(self.fix_claim_id)!=0:
+			print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
+		      f'[{self.get_keyboard_value()}]: ',end='')
+			print(f' {self.fix_claim_id} id claim fixed')
 		return int(self.fix_claim_id)
 	
 	def push_unfix_claim(self):
@@ -374,13 +403,23 @@ class Device:
 		print(f'\t [ОК!] Claims unfixed in the amount of {unfixed_claims} pieces')
 		return unfixed_claims
 										
+	def set_keyboard_value(self,_value):
+		'''
+		Задать принудительно значение набранное на клавиатуре
+		'''
+		try:
+			self.keyboard_value=_value
+			return str(self.keyboard_value)
+		except:
+			print(f'\t [FAULT!] Error in metod set_keyboard_value()')
+			sys.exit()
+		
 	def set_modbus_connection(self):
 		'''
 		Инициировать соединение с объектом управления. Оценить скорость чтения вектора выходных данных
 		'''
 		# открытие соединения с промышленной шиной на основе ранее прочитанных данных connection_config.yaml
-		connections_config=self._read_yaml_file(self.connections_config_file)
-		self.bus_config=connections_config['modbus_config']
+		self.bus_config=self.connections_config['modbus_config']
 		try:
 			self.dv_connection=minimalmodbus.Instrument(self.bus_config['port_name'],\
 															  self.bus_config['slave_address'])  # port name, slave address (in decimal)
@@ -509,7 +548,7 @@ def scan_keyboard(_device):
 	Реализует фоновый опрос клавиатуры на предмет ввода режима 
 	'''
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[Launching the Keyboard Scanne...]')
+		      f'[Launching the keyboard scanner...]')
 	# Получаем текущие настройки терминала
 	old_settings = termios.tcgetattr(sys.stdin)
 	# выводим на экран список доступных режимов
@@ -541,6 +580,8 @@ def scan_keyboard(_device):
 						else:
 							if symbol==len(x):
 								_device.keyboard_value=chars
+								print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
+									f' [Change status...]:                  ')
 								print(f'\t [OK!] New status: {_device.keyboard_value}!!!')
 								char1=''
 								symbol=1

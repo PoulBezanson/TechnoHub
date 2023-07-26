@@ -33,14 +33,13 @@ if __name__=="__main__":
 	scan_keyboard_tread.start()
 	while device.get_keyboard_value()=='None':
 		pass
+	time.sleep(1)
 	# выбор действия при различных статусах
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[Обновление манифестов]:\n'
-			  f'\t [OK!] Waiting for decision...')
-	previus_status_id=device.get_previus_status()[3]
+		      f'[Manifest update...]:')
 	keyboard_status_id=device.get_status_id(device.get_keyboard_value())
-		# обновление манифестов при смене статуса "modification" на "online" или "offline" 
-	if previus_status_id==3 and (keyboard_status_id==1 or keyboard_status_id==2):
+	# обновление манифестов при смене статуса "modification" на "online" или "offline" 
+	if keyboard_status_id!=3:
 		device.push_all_manifests();
 	else:
 		print(f'\t [OK!] Manifest file update is not required')
@@ -48,11 +47,9 @@ if __name__=="__main__":
 	if keyboard_status_id==4:
 		device.push_delete_claims()
 		
-	
 	# обновление в базе данных подтвержденного статуса
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[Обновление в базе данных подтвержденного статуса]:\n'
-			  f'\t [OK!] Waiting for push new status...')
+		      f'[Status update...]:')
 	device.push_status_device('Status was confirmed at initialization',device.get_keyboard_value())
 	device.set_status_device(device.pull_status_device())
 	
@@ -60,25 +57,26 @@ if __name__=="__main__":
 		del device
 		print(f'\t [OK!] Stop controller')
 		sys.exit()
-	print(f'\t [OK!] Stop controller')
+	
 	# проверка связи с экспериментальной установкой
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[Установление связи с экспериментальной установкой]:')
+		      f'[Connection with device...]:')
 	device.set_modbus_connection()
 	device.up_dataset_vector()
 		
 	'''
 	2 этап - реализация режима
 	'''
-	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[{device.get_keyboard_value()}]:')
 	# вход в главный цикл
-	while device.get_status_id(device.get_keyboard_value()) == 1 or \
-				device.get_status_id(device.get_keyboard_value()) ==  3:
-		device.push_reserve_claims()
-		
+	#!!! предусмотреть возможность запрета перехода между режимами 1 и 3 
+	
+	while device.get_status_id(device.get_keyboard_value())==1 or \
+				device.get_status_id(device.get_keyboard_value())==3:
+		if device.push_reserve_claims()==0:
+			continue
+				
 		while device.push_fix_claim()!=0:
-			
+						
 			# обработка заявки
 			device.pull_options_data()
 			time.sleep(5)
@@ -90,13 +88,14 @@ if __name__=="__main__":
 			if device.get_status_id(device.get_keyboard_value())==4:
 				device.push_delete_claims()
 				break
-			continue
+				
+		# выход из цикла при modificatin
+		if device.get_status_device()[3]==3:
+			device.set_keyboard_value(device.get_status_device()[0])
+			break
 		
-		
-		time.sleep(1)
 		continue
 	device.push_status_device('The status was set in the main loop',device.get_keyboard_value())
-	device.set_status_device(device.pull_status_device())	
 	print(f'\t [OK!] Stop controller')
 	
 	

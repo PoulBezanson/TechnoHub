@@ -1,15 +1,15 @@
 name: Монитор качества воздуха в помещении
 experiment_type: Физический
 description: Эксперимент позволяет регистрировать параметры воздуха в учебном помещении
-tags:
-- пуки
-- качество воздуха
-- углекислый газ
-- датчик
+tags: 
+  - пуки
+  - качество воздуха
+  - углекислый газ
+  - датчик
 owner: OOO "Рога и копыта"
 address: Санкт-Петербург, ул.Большая Морская, д.67
 contacts: tel +7 (921) 588-57-37, email bznpavel@yandex.ru
-service_options:
+service_options: # служебные параметры
   name: Служебные параметры установки
   values:
     max_initional_time:
@@ -22,7 +22,10 @@ service_options:
       dimension: шт.
       type: integer
       value: 3
-full_description: Особенности задачи остабилизации перевернутого маятника   можно
-  посмотреть по ссылке [Текст ссылки](https://www.example.com). You can even add equation
-  numbers (unfortunately there is no automatic numbering and refs support) $$|\vec{A}|=\sqrt{A_x^2
-  + A_y^2 + A_z^2}.(1)$$ $$\[\oint_a^b\overbrace{ab}\frac{-b\pm\sqrt{b^2-4ac}}{2a}\]$$
+full_description: >-
+                  Особенности задачи остабилизации перевернутого маятника  
+                  можно посмотреть по ссылке [Текст ссылки](https://www.example.com).
+                  You can even add equation numbers (unfortunately there is no
+                  automatic numbering and refs support)
+                  $$|\vec{A}|=\sqrt{A_x^2 + A_y^2 + A_z^2}.(1)$$
+                  $$\[\oint_a^b\overbrace{ab}\frac{-b\pm\sqrt{b^2-4ac}}{2a}\]$$
