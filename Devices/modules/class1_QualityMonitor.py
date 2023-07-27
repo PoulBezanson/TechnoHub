@@ -55,8 +55,7 @@ class Device:
 		self.db_connection=None			# коннектор базы данных
 		self.bus_config=None			# параметры соединения с промышленной шиной
 		self.dv_connection=None			# коннектор промышленной шины
-		self.status_device=[]    		# текущий статус установки
-		self.keyboard_value='None'		# последнее набранное значение на клавиатуре
+		self.status_device=None    		# текущий статус установки
 		self.option_manifest=None    	# структура json со спецификациями эксперимента
 		self.fix_claim_id=0				# идентификатор зафиксированной заявки
 		self.status_dictionary=None   		# список возможных статусов
@@ -104,20 +103,18 @@ class Device:
 		self.status_dictionary={}
 		for s in _selection:
 			self.status_dictionary[s[0]]=s[1]
-		print(f'\t [OK!] Status dictionary formed: {self.status_dictionary}')
+		print(f'\t [OK!] Status dictionary formed:\n'
+			  f'\t       {self.status_dictionary}')
 		
-		# запрос последнего статуса  контроллера из базы данных
-		self.status_device=self.pull_status_device()
-					
 		# чтение манифестов из базы данных
 		self.experiment_manifest=self._pull_one_manifest('experiment_manifest')
 		self.options_manifest=self._pull_one_manifest('options_manifest')
 		self.results_manifest=self._pull_one_manifest('results_manifest')
 				
-	def pull_status_device(self):
+	def pull_status_device(self, print_message=True):
 		'''
 		Запросить из базы данных статус установки
-		Возвращает: список [status_name, time, description, id_satus]
+		Возвращает: status_name
 		'''
 		db_cursor=self.db_connection.cursor()
 		db_cursor.callproc("pull_status_device",[self.device_identifiers['hash_key']])
@@ -126,10 +123,11 @@ class Device:
 			_selection.append(s.fetchall())
 		status_device=_selection[0][0]
 		db_cursor.close()
-		print(f'\t [ОК!] Pull status: {status_device[0]}\n'
-		      f'\t       Тime status: {datetime.utcfromtimestamp(int(status_device[1])).strftime("%Y-%m-%d %H:%M")}.\n' 
-		      f'\t       Description: {status_device[2]}')
-		return status_device
+		if print_message==True:
+			print(f'\t [ОК!] Pull status: {status_device[0]}\n'
+				  f'\t       Тime status: {datetime.utcfromtimestamp(int(status_device[1])).strftime("%Y-%m-%d %H:%M")}.\n' 
+				  f'\t       Description: {status_device[2]}')
+		return status_device[0]
 		
 	def pull_options_data(self):
 		'''
@@ -180,18 +178,31 @@ class Device:
 		manifest = json.loads(json_manifest)
 		return(manifest)
 		
-	def push_status_device(self, _description, _status):
+	def push_status_device(self, _status, _description, _db_config):
 		'''
 		Записать в базу данных статус установки
 		'''
-		db_cursor=self.db_connection.cursor()
-		routin_parameters=[self.device_identifiers['hash_key'],_status,_description]
-		db_cursor.callproc("push_status_device",routin_parameters)
-		self.db_connection.commit()
-		print(f'\t [ОК!] New status "{_status}" sent to database with description:\n'
-			  f'\t       {_description}')
-		db_cursor.close()
-		return 0
+		# открытие соединения с базой данных сервера
+		db_connection=mysql.connector.connect(
+				host=_db_config["host"],
+				user=_db_config["user"],
+				password=_db_config["password"],
+				database=_db_config["database"])
+		if db_connection.is_connected():
+			db_cursor=db_connection.cursor()
+			routin_parameters=[self.device_identifiers['hash_key'],_status,_description]
+			db_cursor.callproc("push_status_device",routin_parameters)
+			db_connection.commit()
+			print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
+										f' [Change status...]:                 ')
+			print(f'\t [ОК!] Push new status "{_status}" to server with description:\n'
+				  f'\t       {_description}')
+			db_cursor.close()
+			db_connection.close()
+			return _status
+		else:
+			print(f'\t [FAULT!] Lost connection to database')
+			sys.exit()
 	
 	def push_delete_claims(self):
 		'''
@@ -239,17 +250,17 @@ class Device:
 		'''
 		return self.status_device
 		
-	def get_keyboard_value(self):
-		'''
-		Получить предыдущий статус контроллера 
-		'''
-		return str(self.keyboard_value)
-	
 	def get_status_dictionary(self):
 		'''
 		Получить предыдущий статус контроллера 
 		'''
 		return self.status_dictionary
+		
+	def get_db_config(self):
+		'''
+		Получить предыдущий статус контроллера 
+		'''
+		return self.db_config	
 	
 	def _read_yaml_file(self, _file_name):
 		'''
@@ -359,7 +370,7 @@ class Device:
 		reserved_claims=_response[0][0][0]
 		db_cursor.close()
 		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[{self.get_keyboard_value()}]:',end='')
+		      f'[{self.status_device}]:',end='')
 		if reserved_claims!=0:
 			print(f' {reserved_claims} claims reserved')
 		else:
@@ -382,7 +393,7 @@ class Device:
 		self.fix_claim_id=_response[0][0][0]
 		if int(self.fix_claim_id)!=0:
 			print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[{self.get_keyboard_value()}]: ',end='')
+		      f'[{self.status_device}]: ',end='')
 			print(f' {self.fix_claim_id} id claim fixed')
 		return int(self.fix_claim_id)
 	
@@ -430,10 +441,10 @@ class Device:
 			self.dv_connection.mode = minimalmodbus.MODE_RTU   # rtu or ascii mode
 			self.dv_connection.clear_buffers_before_each_transaction = True
 		except:
-			print('\t','[FAULT!] NO divice connection by modbus')
-			self.keyboard_value='offline'
-			self.push_status_device("Stage 1: NO divice connection by modbus", self.keyboard_value)
-			print(f'\t [OK!] Stop controller')
+			message='NO divice connection by modbus'
+			print(f'\t [FAULT!] {message}')
+			self.status_device=self.push_status_device('offline', message)
+			print(f'\t Stop controller')
 			sys.exit() 
 		else:
 			print('\t','[OK!] Connected to device by modbus')
@@ -457,17 +468,17 @@ class Device:
 					min_max_registers['min']=v['mb_reg_address']
 				if v['mb_reg_address']>min_max_registers['max']:
 					min_max_registers['max']=v['mb_reg_address']
-		print(f'\t [OK!] Created a list of MIN/MAX address: {min_max_registers}')
+		print(f'\t [OK!] Created a list of MIN/MAX modbus address registers: {min_max_registers}')
 		#!!! нужно предусмотреть проверку правильности инеми регистров
 		
 		# формирование словаря аргументов modbus функции для группового считывания выходных регистров данных
 		function_code = 4
 		address=min_max_registers['min']
 		number=min_max_registers['max']-min_max_registers['min']+1
-		args_dataset_command={'registeraddress': address, 'number_of_registers': number,  'functioncode': function_code}
+		dataset_command_args={'registeraddress': address, 'number_of_registers': number,  'functioncode': function_code}
 		print(f'\t [OK!] Created a list of argumentes:\n'
-		      f'\t       {args_dataset_command}')
-		return args_dataset_command
+		      f'\t       {dataset_command_args}')
+		return dataset_command_args
 		
 	def get_mb_initial_commands(self):
 		'''
@@ -510,12 +521,10 @@ class Device:
 															number_of_registers=number,\
 															functioncode=code)	
 		except:
-			description='Dataset vector NOT read by modbus'
-			self.keyboard_value='offline'
-			print(f'\t [FAULT!] {description}')
-			time.sleep(1)
-			self.push_status_device("Stage 1: " + description,self.keyboard_value)
-			print(f'\t [OK!] Stop controller')
+			message='Dataset vector NOT read by modbus'
+			print(f'\t [FAULT!] {message}')
+			self.status_device=self.push_status_device('offline', message)
+			print(f'\t Stop controller')
 			sys.exit()   
 		# формирование время опроса вектора
 		time_reading=dt.datetime.now().timestamp()-time_start			
@@ -527,12 +536,10 @@ class Device:
 			description=f'Time_reading={time_reading} (<{delta_time})'
 			print(f'\t [OK!] {description}')
 		else:
-			description=f'Time_reading={time_reading} (>={delta_time}). It is NOT correct'
-			self.keyboard_value='offline'
-			print(f'\t [FAULT!] {description}')
-			time.sleep(1)
-			self.push_status_device("Stage 1: {description}",self.keyboard_value)
-			print(f'\t [OK!] Stop controller')
+			message=f'Time_reading={time_reading} (>={delta_time}). It is NOT correct'
+			print(f'\t [FAULT!] {message}')
+			self.status_device=self.push_status_device('offline', message)
+			print(f'\t Stop controller')
 			sys.exit()      
 		return dataset_vector
 	
@@ -543,20 +550,12 @@ class Device:
 		print(f'\t [OK!] Stop controller')
 	
 		
-def scan_keyboard(_device):
+def scan_keyboard(_device, _db_config):
 	'''
 	Реализует фоновый опрос клавиатуры на предмет ввода режима 
 	'''
-	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[Launching the keyboard scanner...]')
 	# Получаем текущие настройки терминала
 	old_settings = termios.tcgetattr(sys.stdin)
-	# выводим на экран список доступных режимов
-	print('\t Enter key: ',end='')
-	status_dictionary=_device.get_status_dictionary()
-	for key, value in status_dictionary.items():
-		print(f'"{key}" ', end='')
-	print('\n')
 	try:
 		# Устанавливаем необработанный (raw) режим терминала
 		tty.setcbreak(sys.stdin.fileno())
@@ -579,20 +578,23 @@ def scan_keyboard(_device):
 							break
 						else:
 							if symbol==len(x):
-								_device.keyboard_value=chars
-								print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-									f' [Change status...]:                  ')
-								print(f'\t [OK!] New status: {_device.keyboard_value}!!!')
+								_device.push_status_device(chars,'Status set by operator',_db_config)
+								_device.status_device=chars
 								char1=''
+								chars=''
 								symbol=1
 								update=True
-								break
+								
 					else:
 						update=True
 				if update==True:
 					symbol=2
+					
+					#return 0
+			
+		
 	finally:
         # Восстанавливаем настройки терминала
 		termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 		sys.exit
-
+		
