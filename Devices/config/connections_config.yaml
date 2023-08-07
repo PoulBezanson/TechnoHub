@@ -16,4 +16,11 @@ modbus_config:
   byte_size: 8
   stop_bits: 1
   time_out: 0.1
+# конфигурация видео камеры
+videocam_config:
+  temp_videofile_name: captured
+  videofile_extension: mp4
+  videofile_codec: mp4v
+  videocam_fps: 24.0
+  videocam_size: [640, 480]
   

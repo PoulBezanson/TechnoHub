@@ -12,16 +12,23 @@ contacts: tel +7 (921) 588-57-37, email bznpavel@yandex.ru
 service_options:
   name: Служебные параметры установки
   values:
-    max_initional_time:
-      name: ограничение на время начальной инициализации установки
-      dimension: сек.
-      type: float
-      value: 10
     max_reserved_claims:
       name: ограничение на количество заявок при слепом резервировании
       dimension: шт.
       type: integer
       value: 1
+    max_initional_time:
+      name: ограничение на время начальной инициализации установки
+      dimension: сек.
+      type: float
+      value: 69
+    initional_flag:
+      name: признак инициализации установки
+      mb_reg_name: holding
+      mb_reg_address: 16
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+      mb_value: 2
 full_description: Особенности задачи остабилизации перевернутого маятника   можно
   посмотреть по ссылке [Текст ссылки](https://www.example.com). You can even add equation
   numbers (unfortunately there is no automatic numbering and refs support) $$|\vec{A}|=\sqrt{A_x^2

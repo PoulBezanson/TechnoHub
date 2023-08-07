@@ -34,7 +34,7 @@ class Device:
 	'''
 	
 	def test(self):
-		
+		self.up_initional_flag()
 		sys.exit()
 	
 	def __init__(self):
@@ -58,9 +58,11 @@ class Device:
 		self.status_device=None    		# текущий статус установки
 		self.option_manifest=None    	# структура json со спецификациями эксперимента
 		self.fix_claim_id=0				# идентификатор зафиксированной заявки
-		self.status_dictionary=None   		# список возможных статусов
+		self.status_dictionary=None   	# список возможных статусов
 		self.init_controller()			# вызов дополнительной процедуры инициализации
-		
+		self.offline_message=None		# сообщение передаваемое при нештатном выходе в offline
+		self.videocam=None				# экземпляр класса видеокамеры
+		self.videocam_out=None			# экземпляр класса выходного видео файла
 	
 	def init_controller(self):
 		'''
@@ -83,12 +85,13 @@ class Device:
 		if self.db_connection.is_connected():
 			print('\t','[OK!] Connected to database')
 		else:
-			print('\t','[FAULT!] No database connection')
+			print('\t','[CRASH!] No database connection')
 			sys.exit()
 		
 		# аутентификация названия установки
 		db_cursor=self.db_connection.cursor()
-		# TO DO:
+		# TODO:
+		#
 		db_cursor.close()
 		print('\t','[OK!] Authentication completed')
 		
@@ -110,6 +113,9 @@ class Device:
 		self.experiment_manifest=self._pull_one_manifest('experiment_manifest')
 		self.options_manifest=self._pull_one_manifest('options_manifest')
 		self.results_manifest=self._pull_one_manifest('results_manifest')
+		
+		# инициализация видео камеры
+		self._init_videocam()
 				
 	def pull_status_device(self, print_message=True):
 		'''
@@ -134,6 +140,7 @@ class Device:
 		Считать с базы данные параметров эксперимента
 		'''
 		# считывание json объект с базы данных
+		self.options_data=None
 		db_cursor=self.db_connection.cursor()
 		db_cursor.callproc("pull_options_data",[self.fix_claim_id])
 		_response = []
@@ -143,7 +150,7 @@ class Device:
 		db_cursor.close()
 		self.options_data = json.loads(json_data)
 		print(f'\t [OK!] Options data was read from database')
-		return(self.options_data)
+		return 0
 	
 	def _pull_amount_notmodification(self):
 		'''
@@ -169,7 +176,7 @@ class Device:
 			_response.append(s.fetchall())
 		json_manifest=_response[0][0][0]
 		db_cursor.close()
-		if '[FALSE!]' in json_manifest:
+		if '[CRASH!]' in json_manifest:
 			print(f'\t {json_manifest}')
 			sys.exit()
 		else:
@@ -201,7 +208,7 @@ class Device:
 			db_connection.close()
 			return _status
 		else:
-			print(f'\t [FAULT!] Lost connection to database')
+			print(f'\t [CRASH!] Lost connection to database')
 			sys.exit()
 	
 	def push_delete_claims(self):
@@ -238,6 +245,27 @@ class Device:
 		print(f'\t [ОК!] Claims unreserved in the amount of {unreserved_claims} pieces')
 		return unreserved_claims
 		
+	def down_options_data(self):
+		'''
+		Передать на установку парметры эксперимента
+		'''
+		# TO DO:
+		# TO DO:
+		print(f'\t [ОК!] Options data down to device')
+		return 0
+	
+	def down_start_experiment(self):
+		'''
+		Проведение эксперимента 
+		'''
+		print(f'\t [ОК!] The experiment started...')
+		# TO DO: 
+		# TO DO:
+		# TO DO:
+		
+		return 0
+			
+	
 	def get_status_id(self,_status_name):
 		'''
 		Возвращает id кодировку названия статуса
@@ -272,7 +300,7 @@ class Device:
 				print(f'\t [ОК!] File {_file_name} has been read')
 			return result
 		except:
-			print(f'\t [FAULT!] File {_file_name} has NOT been read')
+			print(f'\t [CRASH!] File {_file_name} has NOT been read')
 	
 	def _write_yaml_file(self, _file_name, _data):
 		'''
@@ -283,7 +311,7 @@ class Device:
 				yaml.safe_dump(_data,file, sort_keys=False, allow_unicode=True)
 				print(f'\t [ОК!] File {_file_name} has been written')
 		except:
-			print(f'\t [FAULT!] File {_file_name} has NOT been written')
+			print(f'\t [CRASH!] File {_file_name} has NOT been written')
 				
 	def set_status_device(self, _new_status):
 		'''
@@ -422,7 +450,7 @@ class Device:
 			self.keyboard_value=_value
 			return str(self.keyboard_value)
 		except:
-			print(f'\t [FAULT!] Error in metod set_keyboard_value()')
+			print(f'\t [CRASH!] Error in metod set_keyboard_value()')
 			sys.exit()
 		
 	def set_modbus_connection(self):
@@ -442,12 +470,36 @@ class Device:
 			self.dv_connection.clear_buffers_before_each_transaction = True
 		except:
 			message='NO divice connection by modbus'
-			print(f'\t [FAULT!] {message}')
+			print(f'\t [CRASH!] {message}')
 			self.status_device=self.push_status_device('offline', message)
 			print(f'\t Stop controller')
 			sys.exit() 
 		else:
 			print('\t','[OK!] Connected to device by modbus')
+	
+	def _init_videocam(self):
+		'''
+		Инициализировать захват видео камеры
+		'''
+		videocam_config=self.connections_config['videocam_config']
+		videofile_codec=videocam_config['videofile_codec']
+		temp_videofile_name=videocam_config['temp_videofile_name']
+		videofile_extension=videocam_config['videofile_extension']
+		videofile_codec=videocam_config['videofile_codec']
+		videocam_fps=videocam_config['videocam_fps']
+		videocam_size=videocam_config['videocam_size']
+		self.videocam = cv2.VideoCapture(1)
+		#Error if capture failed
+		if not self.videocam.isOpened():
+			self.offline_message=f'Can`t capture the videocam'
+			print(f'\t [CRASH!] {self.offline_message}')
+			sys.exit()
+			return 1
+		videocodec=cv2.VideoWriter_fourcc(*videofile_codec)
+		temp_videofile_name=temp_videofile_name + '.' + videofile_extension
+		self.videocam_out=cv2.VideoWriter(temp_videofile_name, videocodec, videocam_fps, videocam_size)
+		print(f'\t [OK!] Video camera capture completed successfully')
+		return 0
 		
 		
 	def _get_args_dataset(self, md_reg_name='input'):
@@ -522,7 +574,7 @@ class Device:
 															functioncode=code)	
 		except:
 			message='Dataset vector NOT read by modbus'
-			print(f'\t [FAULT!] {message}')
+			print(f'\t [CRASH!] {message}')
 			self.status_device=self.push_status_device('offline', message)
 			print(f'\t Stop controller')
 			sys.exit()   
@@ -537,12 +589,62 @@ class Device:
 			print(f'\t [OK!] {description}')
 		else:
 			message=f'Time_reading={time_reading} (>={delta_time}). It is NOT correct'
-			print(f'\t [FAULT!] {message}')
+			print(f'\t [CRASH!] {message}')
 			self.status_device=self.push_status_device('offline', message)
 			print(f'\t Stop controller')
 			sys.exit()      
 		return dataset_vector
 	
+	def up_initional_flag(self):
+		'''
+		Контролировать поднятие флага инициализации установки 
+		'''
+		initional_flag=0
+		# получение информации о максимальном времени ожидания инициализации
+		service_options=self.experiment_manifest['service_options']
+		options_values=service_options['values']
+		max_initional=options_values['max_initional_time']
+		max_initional_time=max_initional['value']
+		
+		# формирование аргументов modbus функции чтения input регистров
+		initional_flag=options_values['initional_flag']
+		initional_flag_taget=initional_flag['mb_value']
+		initional_flag_name=initional_flag['mb_reg_name']
+		initional_flag_address=initional_flag['mb_reg_address']
+		decimals = 0
+		if initional_flag_name=='holding':
+			function_code = 3
+		elif initional_flag_name=='input':
+			function_code = 4
+		else:
+			self.offline_message=f'Incorrect filling of the service_options category in the experiment_manifest.yaml file'
+			print(f'\t [CRASH!] {self.offline_message}')
+			return 1
+		# задание счетчика
+		time_start=dt.datetime.now().timestamp()
+		counter=max_initional_time
+		# ожидание инициализации
+		initional_flag_value=None
+		while counter>=0 and initional_flag_value!=initional_flag_taget:
+			print(f'\t Waiting for initional state device ... {counter} sec.  \r',end='')
+			try:
+				initional_flag_value=self.dv_connection.read_register(registeraddress=initional_flag_address,\
+															number_of_decimals=decimals,\
+															functioncode=function_code)
+			except:
+				print(f'\n\t [FAULT!] Connection problem with device                        ')
+			counter=int(max_initional_time-(dt.datetime.now().timestamp()-time_start))
+		print(f'\n')
+		
+		if initional_flag_value==initional_flag_taget:
+			message=f'Initional state done for {max_initional_time-counter} sec.'
+			print(f'\t [OK!] {message}')
+			return 0
+		else:	
+			self.offline_message=f'Initional state wait time out of range'
+			print(f'\t [CRASH!] {self.offline_message}')
+			return 1
+			
 	def __del__(self):
 		'''
 		Деструктор 

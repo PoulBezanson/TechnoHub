@@ -79,17 +79,28 @@ if __name__=="__main__":
 		if device.push_reserve_claims()!=0:
 			while device.push_fix_claim()!=0:
 				# обработка заявки
-				device.pull_options_data()
-				time.sleep(10)
-				# обработка режима
-				if device.get_status_device()=='offline':
-					device.push_unreserve_claims()
-					break
+				if device.pull_options_data()==0:
+					if device.down_options_data()==0:
+						if device.up_initional_flag()==0:
+							
+							# TO DO
+							
+							
+							# обработка введного режима
+							if device.get_status_device()=='offline':
+								device.push_unreserve_claims()
+								break
+							continue
+				device.status_device=device.push_status_device('offline', device.offline_message, device.db_config)
+				device.push_unfix_claim()
+				device.push_unreserve_claims()
+				sys.exit()
+					
 		# выход из главного цикла при modification и disposal
 		# проверка изменения статуса на сервером другими контроллерами
-		pull_status_device=device.pull_status_device(print_message=False)
-		if pull_status_device!=device.get_status_device():
-			device.set_status_device(pull_status_device)
+		pull_status=device.pull_status_device(print_message=False)
+		if pull_status!=device.get_status_device():
+			device.set_status_device(pull_status)
 		if device.get_status_device()=='modification' and device.push_reserve_claims()==0:
 			break
 		if device.get_status_device()=='disposal':

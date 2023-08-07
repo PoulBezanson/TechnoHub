@@ -2,7 +2,7 @@ time_options:
   name: Временные параметры
   values:
     start_time:
-      ws_name: начальное значение времени
+      ws_name: длительность эксперимента
       ws_dimension: сек
       ws_type: integer
       ws_regexp: ^([1-9]|10)$
@@ -31,11 +31,11 @@ initial state:
       ws_type: integer
       ws_regexp: ^(нет|слабо|сильно)$
       ws_value: нет, слабо или сильно
-      ws_dictionary:
+      ws_control: switch
+      mb_dictionary:
         нет: 0
         слабо: 1
         сильно: 2
-      ws_control: switch
       mb_reg_name: holding
       mb_reg_address: 16
       mb_reg_type: uint16_t
