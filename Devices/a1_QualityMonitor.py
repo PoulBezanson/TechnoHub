@@ -71,6 +71,7 @@ if __name__=="__main__":
 	'''
 	2 этап - реализация режима
 	'''
+	
 	# вход в главный цикл
 	#!!! предусмотреть возможность запрета перехода между режимами 1 и 3 
 	
@@ -82,15 +83,16 @@ if __name__=="__main__":
 				if device.pull_options_data()==0:
 					if device.down_options_data()==0:
 						if device.up_initional_flag()==0:
-							
-							# TO DO
-							
-							
-							# обработка введного режима
-							if device.get_status_device()=='offline':
-								device.push_unreserve_claims()
-								break
-							continue
+							if device.start_experiment()==0:
+								if device.processing_dataset()==0:
+									if device.push_data_files()==0:
+										
+										# TO DO
+										# обработка введного режима
+										if device.get_status_device()=='offline':
+											device.push_unreserve_claims()
+											break
+										continue
 				device.status_device=device.push_status_device('offline', device.offline_message, device.db_config)
 				device.push_unfix_claim()
 				device.push_unreserve_claims()

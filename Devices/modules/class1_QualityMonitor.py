@@ -27,6 +27,10 @@ import mysql.connector
 import socket
 import subprocess
 import cv2 # https://docs.opencv.org/4.7.0/
+import shutil
+
+# шина событий
+event_up_vector=threading.Event() # флаг управления чтением вектора данных с устройства
 
 class Device:
 	'''
@@ -63,6 +67,8 @@ class Device:
 		self.offline_message=None		# сообщение передаваемое при нештатном выходе в offline
 		self.videocam=None				# экземпляр класса видеокамеры
 		self.videocam_out=None			# экземпляр класса выходного видео файла
+		self.output_files={}			# словарь выходных файлов для отправки на сервер
+		self.temp_output_files={}		# словарь временных выходных файлов
 	
 	def init_controller(self):
 		'''
@@ -113,10 +119,7 @@ class Device:
 		self.experiment_manifest=self._pull_one_manifest('experiment_manifest')
 		self.options_manifest=self._pull_one_manifest('options_manifest')
 		self.results_manifest=self._pull_one_manifest('results_manifest')
-		
-		# инициализация видео камеры
-		self._init_videocam()
-				
+							
 	def pull_status_device(self, print_message=True):
 		'''
 		Запросить из базы данных статус установки
@@ -134,7 +137,76 @@ class Device:
 				  f'\t       Тime status: {datetime.utcfromtimestamp(int(status_device[1])).strftime("%Y-%m-%d %H:%M")}.\n' 
 				  f'\t       Description: {status_device[2]}')
 		return status_device[0]
+	
+	def processing_dataset(self):
+		'''
+		Обработать наборы данных. Сформировать выходные файлы
+		''
+		print("[...] processing_data_series()") #, end='\r')
+		# формирование названия колонок таблицы данных
+		columns_name=[x for x in self.data_type]
+		# формирование таблицы DataFrame из временного ряда векторов параметров
+		data_frame=pd.DataFrame(self.data_series,columns=columns_name)
+		# коррекция типа данных таблицы
+		data_frame=data_frame.astype({x:self.data_type[x][0] for x in self.data_type})
+		# преобразование данных - сдвиг десятичной запятой
+		for x in self.data_type:
+			data_frame[x]=data_frame[x]*pow(10,int(self.data_type[x][1]))
+		# округление числовых данных
+		round_type = {x: abs(self.data_type[x][1]) for x in self.data_type}
+		round_type['time_start']=6
+		round_type['time_reading']=6
+		data_frame=data_frame.round(round_type)
+		# запись данных в файл 
+		datafile_name=self.file_name+'.'+self.datafile_extension		
+		data_frame.to_csv(path_or_buf=datafile_name, sep=';', decimal=',')
+		print("[...] processing_data_series(): Print data series:\n")
+		print(data_frame)
+		'''
+						
+		# параметры временного видео файла
+		video_options=self.results_manifest['video_options']
+		values=video_options['values']
+		extension=values['extension']
+		temp_videofile_name=extension['temp_name']
+		videofile_extension=extension['ws_value']
+		temp_videofile_name=temp_videofile_name+'.'+videofile_extension
+		videofile_suffix=extension['suffix']
+		self.temp_output_files[videofile_suffix]=temp_videofile_name # добавление имени файла в словарь
 		
+		# параметры целевого видео фала
+		
+		videofile_name=self.fix_claim_id + '_' + videofile_suffix + '.' + videofile_extension
+		self.output_files[videofile_suffix]=videofile_name # добавление имени файла в словарь
+				
+		# параметры временного файла данных
+		dataset_options=self.results_manifest['dataset_options']
+		values=dataset_options['values']
+		extension=values['extension']
+		temp_datafile_name=extension['temp_name']
+		datafile_extension=extension['ws_value']
+		temp_datafile_name=temp_datafile_name+'.'+datafile_extension
+		datafile_suffix=extension['suffix']
+		self.temp_output_files[datafile_suffix]=temp_datafile_name # добавление имени файла в словарь
+		
+		# параметры целевого файла данных
+		datafile_name=self.fix_claim_id + '_' + datafile_suffix + '.' + datafile_extension
+		self.output_files[datafile_suffix]=datafile_name # добавление имени файла в словарь
+		
+		# операции копирования и удаления над файлами
+		for key, item in self.output_files.items():
+			file_name=self.output_files[key]
+			temp_file_name=self.temp_output_files[key]
+			if os.path.exists(temp_file_name):
+				shutil.copyfile(temp_file_name, file_name)
+				#os.remove(temp_videofile_name)
+				print(f"\t [OK!] Created file {file_name}")
+			else:
+				self.offline_message=f'File {file_name} not exist'
+				print(f" \t [CRASH!] {self.offline_message}")
+				return 1
+		return 0		
+	
 	def pull_options_data(self):
 		'''
 		Считать с базы данные параметров эксперимента
@@ -211,6 +283,39 @@ class Device:
 			print(f'\t [CRASH!] Lost connection to database')
 			sys.exit()
 	
+	def push_data_files(self):
+		'''
+		Подготовить и отправить файлы с наборами данных на сервер
+		'''
+		# формирование параметров связи с файл-сервером
+		fileserver_config=self.connections_config['fileserver_config']
+		user=fileserver_config['user']
+		host=fileserver_config['host']
+		folder=fileserver_config['folder']
+		# передача  файла на сервер
+		for key, item in self.output_files.items():
+			file_name=self.output_files[key]
+			counter=5 # максимальное время ожидания файла в папке
+			while not os.path.exists(file_name) and counter>0:
+				time.sleep(1)
+				counter=counter+1
+			if counter==0:
+				self.offline_message=f'File {file_name} NOT found'
+				print(f'\t [CRASH!] {self.offline_message}')
+				return 1
+			rsync_command = f"rsync -avz -e ssh {file_name} {user}@{host}:{folder}"
+			subprocess.run(rsync_command, shell=True)
+			print(f"\t [ОК!] The file {file_name} was sent to the server")
+			# удаление файла из текущей папки
+			os.remove(file_name)
+			if not os.path.exists(file_name):
+				print(f"\t [ОК!] The file {file_name} deleted from work folder")
+			else:
+				self.offline_message=f'File {file_name} NOT deleted'
+				print("[CRASH!] {self.offline_message}")
+				return 1
+		return 0
+		
 	def push_delete_claims(self):
 		'''
 		Записать в базу данных статус установки
@@ -254,18 +359,18 @@ class Device:
 		print(f'\t [ОК!] Options data down to device')
 		return 0
 	
-	def down_start_experiment(self):
+	def start_experiment(self):
 		'''
 		Проведение эксперимента 
 		'''
 		print(f'\t [ОК!] The experiment started...')
+		# инициализация видео камеры
+		self.init_videocam()
+		self.videocam.release()
 		# TO DO: 
 		# TO DO:
-		# TO DO:
-		
 		return 0
-			
-	
+		
 	def get_status_id(self,_status_name):
 		'''
 		Возвращает id кодировку названия статуса
@@ -477,17 +582,25 @@ class Device:
 		else:
 			print('\t','[OK!] Connected to device by modbus')
 	
-	def _init_videocam(self):
+	def init_videocam(self):
 		'''
 		Инициализировать захват видео камеры
 		'''
-		videocam_config=self.connections_config['videocam_config']
-		videofile_codec=videocam_config['videofile_codec']
-		temp_videofile_name=videocam_config['temp_videofile_name']
-		videofile_extension=videocam_config['videofile_extension']
-		videofile_codec=videocam_config['videofile_codec']
-		videocam_fps=videocam_config['videocam_fps']
-		videocam_size=videocam_config['videocam_size']
+		# параметры временного видео файла
+		video_options=self.results_manifest['video_options']
+		values=video_options['values']
+		extension=values['extension']
+		temp_videofile_name=extension['temp_name']
+		videofile_extension=extension['ws_value']
+		
+		# параметры видео камеры 
+		codec=values['codec']
+		videofile_codec=codec['ws_value']
+		fps=values['fps']
+		videocam_fps=fps['ws_value']
+		size=values['size']
+		videocam_size=size['ws_value']
+		
 		self.videocam = cv2.VideoCapture(1)
 		#Error if capture failed
 		if not self.videocam.isOpened():
@@ -699,4 +812,23 @@ def scan_keyboard(_device, _db_config):
         # Восстанавливаем настройки терминала
 		termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 		sys.exit
-		
+
+def read_videocam(self, _videocam, _videocam_out):
+	'''
+	Реализует фоновую запись видео 
+	'''
+	event_up_vector.wait()
+	# главный цикл записи видео
+	while(event_up_vector.is_set()):
+		ret, frame = _videocam.read()
+		if ret:
+			_videocam_out.write(frame)
+		else:
+			self.offline_message=f'Can`t receive video frame'
+			print("\t [CRASH!] {self.offline_message}")
+			_videocam.release()
+			return 1
+	# закрытие видеофайла и блокировка камеры
+	_videocam.release()
+	_videocam_out.release()
+	return 0	

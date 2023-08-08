@@ -1,7 +1,7 @@
 dataset_options:
   name: Параметры выходных данных
   values:
-    datafile_extension:
+    extension:
       ws_name: формат файла данных
       ws_value: csv
       ws_dimension: null
@@ -11,6 +11,8 @@ dataset_options:
       mb_reg_address: null
       mb_reg_type: null
       mb_decimals: null
+      temp_name: captured
+      suffix: data
     time_start:
       ws_name: время измерения вектора
       ws_value: null
@@ -110,6 +112,8 @@ video_options:
       ws_dimension: null
       ws_regexp: .*
       ws_control: readonly
+      temp_name: captured
+      suffix: video
     codec:
       ws_name: кодек видео видеофайла
       ws_value: mp4v
@@ -124,7 +128,9 @@ video_options:
       ws_control: readonly
     size:
       ws_name: качество картинки
-      ws_value: (640, 480)
+      ws_value:
+      - 640
+      - 480
       ws_dimension: (точек,точек)
       ws_regexp: .*
       ws_control: readonly
