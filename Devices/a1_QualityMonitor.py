@@ -28,12 +28,12 @@ if __name__=="__main__":
 	#device.test()
 		
 	# запуск сканера клавиатуры и ожидание обновления статуса
-	scan_keyboard_tread = threading.Thread(target=dv.scan_keyboard, args=(device, device.get_db_config(),))
-	scan_keyboard_tread.daemon = True
-	scan_keyboard_tread.start()
-	device.pull_status_device()
-	
+	thread_scan_keyboard = threading.Thread(target=dv.scan_keyboard, args=(device, device.get_db_config(),))
+	thread_scan_keyboard.daemon = True
+	thread_scan_keyboard.start()
+		
 	# ожидание начальной инициализации статуса
+	device.pull_status_device()
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 		      f'[Enter status...]:')
 	status_dictionary=device.get_status_dictionary()
@@ -86,16 +86,16 @@ if __name__=="__main__":
 							if device.start_experiment()==0:
 								if device.processing_dataset()==0:
 									if device.push_data_files()==0:
-										
 										# TO DO
 										# обработка введного режима
 										if device.get_status_device()=='offline':
 											device.push_unreserve_claims()
 											break
 										continue
-				device.status_device=device.push_status_device('offline', device.offline_message, device.db_config)
 				device.push_unfix_claim()
 				device.push_unreserve_claims()
+				if device.get_status_device()!='offline':
+					device.status_device=device.push_status_device('offline', device.offline_message, device.db_config)
 				sys.exit()
 					
 		# выход из главного цикла при modification и disposal

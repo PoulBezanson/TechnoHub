@@ -11,6 +11,7 @@ dataset_options:
       mb_reg_address: null
       mb_reg_type: null
       mb_decimals: null
+      value: csv
       temp_name: captured
       suffix: data
     time_start:
@@ -54,7 +55,7 @@ dataset_options:
       mb_reg_type: uint16_t
       mb_decimals: 2
     pm1_0:
-      ws_name: концентрация частиц PM1.0
+      ws_name: концентрация PM1.0
       ws_value: null
       ws_dimension: мкг/м^3
       ws_regexp: .*
@@ -64,7 +65,7 @@ dataset_options:
       mb_reg_type: uint16_t
       mb_decimals: 0
     pm2_5:
-      ws_name: концентрация частиц PM2.5
+      ws_name: концентрация PM2.5
       ws_value: null
       ws_dimension: мкг/м^3
       ws_regexp: .*
@@ -74,7 +75,7 @@ dataset_options:
       mb_reg_type: uint16_t
       mb_decimals: 0
     pm10:
-      ws_name: концентрация частиц PM10
+      ws_name: концентрация PM10
       ws_value: null
       ws_dimension: мкг/м^3
       ws_regexp: .*
@@ -84,7 +85,7 @@ dataset_options:
       mb_reg_type: uint16_t
       mb_decimals: 0
     temperature:
-      ws_name: концентрация частиц PM10
+      ws_name: концентрация PM10
       ws_value: null
       ws_dimension: гр
       ws_regexp: .*
@@ -94,7 +95,7 @@ dataset_options:
       mb_reg_type: uint16_t
       mb_decimals: 1
     humidity:
-      ws_name: концентрация частиц PM10
+      ws_name: влажность
       ws_value: null
       ws_dimension: процент
       ws_regexp: .*
@@ -112,6 +113,7 @@ video_options:
       ws_dimension: null
       ws_regexp: .*
       ws_control: readonly
+      value: mp4
       temp_name: captured
       suffix: video
     codec:
@@ -120,17 +122,20 @@ video_options:
       ws_dimension: null
       ws_regexp: .*
       ws_control: readonly
+      value: mp4v
     fps:
       ws_name: частота кадров
       ws_value: 23.0
       ws_dimension: кадр/сек
       ws_regexp: .*
       ws_control: readonly
+      value: 23.0
     size:
       ws_name: качество картинки
-      ws_value:
-      - 640
-      - 480
+      ws_value: 640x480
       ws_dimension: (точек,точек)
       ws_regexp: .*
       ws_control: readonly
+      value:
+      - 640
+      - 480

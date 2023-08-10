@@ -23,7 +23,7 @@ service_options:
       type: float
       value: 69
     initional_flag:
-      name: признак инициализации установки
+      name: признак начальной инициализации установки
       mb_reg_name: holding
       mb_reg_address: 16
       mb_reg_type: uint16_t

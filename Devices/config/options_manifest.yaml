@@ -1,13 +1,20 @@
 time_options:
   name: Временные параметры
   values:
-    start_time:
+    duration_time:
       ws_name: длительность эксперимента
       ws_dimension: сек
       ws_type: integer
       ws_regexp: ^([1-9]|10)$
       ws_value: целое число 1 от до 10
       ws_control: field
+    start_time:
+      ws_name: время начала модельное
+      ws_dimension: сек
+      ws_type: integer
+      ws_regexp: ^([1-9]|10)$
+      ws_value: текущее
+      ws_control: readonly
     delta_time:
       ws_name: время дискретизации
       ws_dimension: сек
@@ -25,24 +32,6 @@ time_options:
 initial state:
   name: Начальное состояние
   values:
-    back_light:
-      ws_name: интенсивность подсветки
-      ws_dimension: состояние
-      ws_type: integer
-      ws_regexp: ^(нет|слабо|сильно)$
-      ws_value: нет, слабо или сильно
-      ws_control: switch
-      mb_dictionary:
-        нет: 0
-        слабо: 1
-        сильно: 2
-      mb_reg_name: holding
-      mb_reg_address: 16
-      mb_reg_type: uint16_t
-      mb_decimals: 0
-model_parameters:
-  name: Параметры модели
-  values:
     mute_state:
       ws_name: звуковая сигнализация
       ws_dimension: состояние
@@ -57,6 +46,9 @@ model_parameters:
       mb_reg_address: 17
       mb_reg_type: bit
       mb_decimals: 0
+model_parameters:
+  name: Параметры модели
+  values:
     temperature_unit:
       ws_name: размерность температуры
       ws_dimension: код

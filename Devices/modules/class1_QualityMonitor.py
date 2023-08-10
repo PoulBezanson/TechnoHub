@@ -31,6 +31,7 @@ import shutil
 
 # шина событий
 event_up_vector=threading.Event() # флаг управления чтением вектора данных с устройства
+event_start_experiment=threading.Event() # флаг начала эксперимента
 
 class Device:
 	'''
@@ -45,8 +46,14 @@ class Device:
 		'''
 		Конструктор
 		'''
+		self.bus_config=None			# параметры соединения с промышленной шиной
 		self.connections_config_file='./config/connections_config.yaml' # файл сетевой конфигурации
 		self.connections_config=None	# структура данных c с параметрами сетевой конфигурации 
+		self.dataset=[]					# выходной набор данных
+		self.device_identifiers=None	# идентификаторы экспериментальной установки
+		self.db_config=None				# параметры входа в базу данных
+		self.db_connection=None			# коннектор базы данных
+		self.dv_connection=None			# коннектор промышленной шины
 		self.experiment_manifest_file='./config/experiment_manifest.yaml' # файл общей конфигурации эксперимента
 		self.experiment_manifest=None   # структура данных манифеста эксперимента 
 		self.options_manifest_file='./config/options_manifest.yaml' # файл общей конфигурации эксперимента
@@ -54,11 +61,6 @@ class Device:
 		self.results_manifest_file='./config/results_manifest.yaml' # файл общей конфигурации эксперимента
 		self.results_manifest=None      # структура данных результатов эксперимента
 		self.options_data=None			# структура со значениями данными для проведения эксперимента
-		self.device_identifiers=None	# идентификаторы экспериментальной установки
-		self.db_config=None				# параметры входа в базу данных
-		self.db_connection=None			# коннектор базы данных
-		self.bus_config=None			# параметры соединения с промышленной шиной
-		self.dv_connection=None			# коннектор промышленной шины
 		self.status_device=None    		# текущий статус установки
 		self.option_manifest=None    	# структура json со спецификациями эксперимента
 		self.fix_claim_id=0				# идентификатор зафиксированной заявки
@@ -169,12 +171,12 @@ class Device:
 		values=video_options['values']
 		extension=values['extension']
 		temp_videofile_name=extension['temp_name']
-		videofile_extension=extension['ws_value']
+		videofile_extension=extension['value']
 		temp_videofile_name=temp_videofile_name+'.'+videofile_extension
 		videofile_suffix=extension['suffix']
 		self.temp_output_files[videofile_suffix]=temp_videofile_name # добавление имени файла в словарь
 		
-		# параметры целевого видео фала
+		# параметры целевого видео файла
 		
 		videofile_name=self.fix_claim_id + '_' + videofile_suffix + '.' + videofile_extension
 		self.output_files[videofile_suffix]=videofile_name # добавление имени файла в словарь
@@ -184,7 +186,7 @@ class Device:
 		values=dataset_options['values']
 		extension=values['extension']
 		temp_datafile_name=extension['temp_name']
-		datafile_extension=extension['ws_value']
+		datafile_extension=extension['value']
 		temp_datafile_name=temp_datafile_name+'.'+datafile_extension
 		datafile_suffix=extension['suffix']
 		self.temp_output_files[datafile_suffix]=temp_datafile_name # добавление имени файла в словарь
@@ -349,6 +351,15 @@ class Device:
 		db_cursor.close()
 		print(f'\t [ОК!] Claims unreserved in the amount of {unreserved_claims} pieces')
 		return unreserved_claims
+	
+	def _delta_timer(self, _delta_time):
+		'''
+		Резрешать периодически чтение вектора данных с устройства
+		'''
+		while event_start_experiment.is_set():
+			event_up_vector.set()
+			time.sleep(_delta_time)
+		return 0
 		
 	def down_options_data(self):
 		'''
@@ -364,13 +375,69 @@ class Device:
 		Проведение эксперимента 
 		'''
 		print(f'\t [ОК!] The experiment started...')
-		# инициализация видео камеры
-		self.init_videocam()
-		self.videocam.release()
-		# TO DO: 
-		# TO DO:
-		return 0
 		
+		# инициализация видео камеры и запуск процесса записи
+		self._init_videocam()
+		thread_read_videocam=threading.Thread(name='thread_read_videocam',\
+											  target=self._read_videocam)
+		thread_read_videocam.daemon = True
+		thread_read_videocam.start()
+		event_start_experiment.set()
+						
+		# формирование аргументов modbus функции чтения input регистров
+		args=self._get_args_dataset(md_reg_name='input')
+		address=args['registeraddress']
+		number=args['number_of_registers']
+		code=args['functioncode']
+		
+		# чтение манифеста параметров эксперимента - options_manifest
+		options_data=self.options_data['time_options']
+		values=options_data['values']
+		delta_time=values['delta_time']['ws_value']
+		
+		# настройке длительности эксперимента
+		duration_time_str=values['duration_time']['ws_value']
+		duration_type=values['duration_time']['ws_type']
+		if duration_type=='integer':
+			duration_time=int(duration_time_str)
+		elif duration_type=='float':
+			duration_time=float(duration_time)
+		
+		# Запуск потока установки разрешения чтения вектора данных
+		thread_delta_timer=threading.Thread(name='thread_delta_timer',\
+											  target=self._delta_timer,\
+											  args=(delta_time,))
+		thread_delta_timer.daemon = True
+		thread_delta_timer.start()
+		
+		# формирование выходного вектора
+		t=0
+		while t<duration_time:
+			event_up_vector.wait()
+			event_up_vector.clear()
+			time_start=dt.datetime.now().timestamp()
+			try:
+				dataset_vector=self.dv_connection.read_registers(registeraddress=address,\
+																number_of_registers=number,\
+																functioncode=code)	
+				time_reading=dt.datetime.now().timestamp()-time_start
+				self.dataset.append([time_start, time_reading]+ dataset_vector)
+				
+				t=t+delta_time
+			except:
+				self.offline_message='Dataset vector NOT read by modbus'
+				print(f'\t [CRASH!] {message}')
+				return 1
+		
+		event_start_experiment.clear()
+		thread_read_videocam.join()
+		thread_delta_timer.join()
+				
+		print(f'\t [OK!] Dataset read:\n'
+			  f'\t {self.dataset}')
+		     
+		return 0
+				
 	def get_status_id(self,_status_name):
 		'''
 		Возвращает id кодировку названия статуса
@@ -546,6 +613,36 @@ class Device:
 		db_cursor.close()
 		print(f'\t [ОК!] Claims unfixed in the amount of {unfixed_claims} pieces')
 		return unfixed_claims
+
+	def _read_videocam(self):
+		'''
+		Реализует фоновую запись видео 
+		'''
+		event_start_experiment.wait()
+		# главный цикл записи видео
+		while(event_start_experiment.is_set()):
+			ret, frame = self.videocam.read()
+			if ret:
+				color_yellow = (0,255,255)
+				text="Claim id - " + self.fix_claim_id
+				cv2.putText(frame, text, (10,20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_yellow, 2)
+				self.videocam_out.write(frame)
+				
+			else:
+				self.offline_message=f'Can`t receive video frame'
+				print("\t [CRASH!] {self.offline_message}")
+				_videocam.release()
+				return 1
+		# закрытие видеофайла и блокировка камеры
+		self.videocam.release()
+		self.videocam_out.release()
+		return 0	
+
+	
+	
+	
+	
+	
 										
 	def set_keyboard_value(self,_value):
 		'''
@@ -582,7 +679,7 @@ class Device:
 		else:
 			print('\t','[OK!] Connected to device by modbus')
 	
-	def init_videocam(self):
+	def _init_videocam(self):
 		'''
 		Инициализировать захват видео камеры
 		'''
@@ -591,15 +688,15 @@ class Device:
 		values=video_options['values']
 		extension=values['extension']
 		temp_videofile_name=extension['temp_name']
-		videofile_extension=extension['ws_value']
+		videofile_extension=extension['value']
 		
 		# параметры видео камеры 
 		codec=values['codec']
-		videofile_codec=codec['ws_value']
+		videofile_codec=codec['value']
 		fps=values['fps']
-		videocam_fps=fps['ws_value']
+		videocam_fps=fps['value']
 		size=values['size']
-		videocam_size=size['ws_value']
+		videocam_size=size['value']
 		
 		self.videocam = cv2.VideoCapture(1)
 		#Error if capture failed
@@ -611,7 +708,7 @@ class Device:
 		videocodec=cv2.VideoWriter_fourcc(*videofile_codec)
 		temp_videofile_name=temp_videofile_name + '.' + videofile_extension
 		self.videocam_out=cv2.VideoWriter(temp_videofile_name, videocodec, videocam_fps, videocam_size)
-		print(f'\t [OK!] Video camera capture completed successfully')
+		print(f'\t [OK!] Video camera captured')
 		return 0
 		
 		
@@ -666,7 +763,6 @@ class Device:
 		return mb_initial_commands
 	
 	def up_dataset_vector(self):
-		#!!! сделать выполнение команды через try
 		'''
 		Считать с объекта вектор выходных параметров
 		'''	
@@ -738,7 +834,7 @@ class Device:
 		counter=max_initional_time
 		# ожидание инициализации
 		initional_flag_value=None
-		while counter>=0 and initional_flag_value!=initional_flag_taget:
+		while counter>=0 and initional_flag_value!=initional_flag_taget and self.status_device!='offline':
 			print(f'\t Waiting for initional state device ... {counter} sec.  \r',end='')
 			try:
 				initional_flag_value=self.dv_connection.read_register(registeraddress=initional_flag_address,\
@@ -753,9 +849,11 @@ class Device:
 			message=f'Initional state done for {max_initional_time-counter} sec.'
 			print(f'\t [OK!] {message}')
 			return 0
-		else:	
+		elif counter==-1:	
 			self.offline_message=f'Initional state wait time out of range'
 			print(f'\t [CRASH!] {self.offline_message}')
+			return 1
+		else:
 			return 1
 			
 	def __del__(self):
@@ -813,22 +911,3 @@ def scan_keyboard(_device, _db_config):
 		termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 		sys.exit
 
-def read_videocam(self, _videocam, _videocam_out):
-	'''
-	Реализует фоновую запись видео 
-	'''
-	event_up_vector.wait()
-	# главный цикл записи видео
-	while(event_up_vector.is_set()):
-		ret, frame = _videocam.read()
-		if ret:
-			_videocam_out.write(frame)
-		else:
-			self.offline_message=f'Can`t receive video frame'
-			print("\t [CRASH!] {self.offline_message}")
-			_videocam.release()
-			return 1
-	# закрытие видеофайла и блокировка камеры
-	_videocam.release()
-	_videocam_out.release()
-	return 0	
