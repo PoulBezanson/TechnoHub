@@ -143,12 +143,58 @@ class Device:
 	def processing_dataset(self):
 		'''
 		Обработать наборы данных. Сформировать выходные файлы
-		''
-		print("[...] processing_data_series()") #, end='\r')
-		# формирование названия колонок таблицы данных
-		columns_name=[x for x in self.data_type]
-		# формирование таблицы DataFrame из временного ряда векторов параметров
-		data_frame=pd.DataFrame(self.data_series,columns=columns_name)
+		'''
+		# подготовка параметров временного видео файла
+		video_options=self.results_manifest['video_options']
+		values=video_options['values']
+		extension=values['extension']
+		temp_videofile_name=extension['temp_name']
+		videofile_extension=extension['value']
+		temp_videofile_name=temp_videofile_name+'.'+videofile_extension
+		videofile_suffix=extension['suffix']
+		self.temp_output_files[videofile_suffix]=temp_videofile_name # добавление имени файла в словарь
+		
+		# подготовка параметров целевого видео файла
+		videofile_name=self.fix_claim_id + '_' + videofile_suffix + '.' + videofile_extension
+		self.output_files[videofile_suffix]=videofile_name # добавление имени файла в словарь
+				
+		# подготовка параметров временного файла данных
+		dataset_options=self.results_manifest['dataset_options']
+		values=dataset_options['values']
+		extension=values['extension']
+		temp_datafile_name=extension['temp_name']
+		datafile_extension=extension['value']
+		temp_datafile_name=temp_datafile_name+'.'+datafile_extension
+		datafile_suffix=extension['suffix']
+		self.temp_output_files[datafile_suffix]=temp_datafile_name # добавление имени файла в словарь
+		
+		# подготовка параметров целевого файла данных
+		datafile_name=self.fix_claim_id + '_' + datafile_suffix + '.' + datafile_extension
+		self.output_files[datafile_suffix]=datafile_name # добавление имени файла в словарь
+		
+		# формирование названия полей таблицы данных
+		dataset_options=self.results_manifest['dataset_options']
+		values=dataset_options['values']
+		columns_name=[]
+		for key, value in values.items():
+			columns_name.append(value['ws_value'])
+		columns_name.pop(0) # удаление из списка значений: extension
+		print(f"\t [OK!] Created column_names:\n {columns_name}")
+		
+		# формирование таблицы DataFrame из списка данных
+		dataframe=pd.DataFrame(self.dataset,columns=columns_name)
+		
+		# форматирование и обработка данных
+		# TO DO
+		
+		# запись данных во временный файл
+		separator=';' # разделитель данных в выходном файле
+		decimal=','   # разделитель дробной чати в выходном файле
+		dataframe.to_csv(path_or_buf=temp_datafile_name, sep=separator, decimal=decimal)
+		print(f"\t [OK!] The dataset is written to a temporary file : {temp_datafile_name}")
+				
+		'''
+		
 		# коррекция типа данных таблицы
 		data_frame=data_frame.astype({x:self.data_type[x][0] for x in self.data_type})
 		# преобразование данных - сдвиг десятичной запятой
@@ -159,42 +205,9 @@ class Device:
 		round_type['time_start']=6
 		round_type['time_reading']=6
 		data_frame=data_frame.round(round_type)
-		# запись данных в файл 
-		datafile_name=self.file_name+'.'+self.datafile_extension		
-		data_frame.to_csv(path_or_buf=datafile_name, sep=';', decimal=',')
-		print("[...] processing_data_series(): Print data series:\n")
-		print(data_frame)
+		
 		'''
-						
-		# параметры временного видео файла
-		video_options=self.results_manifest['video_options']
-		values=video_options['values']
-		extension=values['extension']
-		temp_videofile_name=extension['temp_name']
-		videofile_extension=extension['value']
-		temp_videofile_name=temp_videofile_name+'.'+videofile_extension
-		videofile_suffix=extension['suffix']
-		self.temp_output_files[videofile_suffix]=temp_videofile_name # добавление имени файла в словарь
-		
-		# параметры целевого видео файла
-		
-		videofile_name=self.fix_claim_id + '_' + videofile_suffix + '.' + videofile_extension
-		self.output_files[videofile_suffix]=videofile_name # добавление имени файла в словарь
-				
-		# параметры временного файла данных
-		dataset_options=self.results_manifest['dataset_options']
-		values=dataset_options['values']
-		extension=values['extension']
-		temp_datafile_name=extension['temp_name']
-		datafile_extension=extension['value']
-		temp_datafile_name=temp_datafile_name+'.'+datafile_extension
-		datafile_suffix=extension['suffix']
-		self.temp_output_files[datafile_suffix]=temp_datafile_name # добавление имени файла в словарь
-		
-		# параметры целевого файла данных
-		datafile_name=self.fix_claim_id + '_' + datafile_suffix + '.' + datafile_extension
-		self.output_files[datafile_suffix]=datafile_name # добавление имени файла в словарь
-		
+			
 		# операции копирования и удаления над файлами
 		for key, item in self.output_files.items():
 			file_name=self.output_files[key]
@@ -395,7 +408,7 @@ class Device:
 		values=options_data['values']
 		delta_time=values['delta_time']['ws_value']
 		
-		# настройке длительности эксперимента
+		# настройка длительности эксперимента
 		duration_time_str=values['duration_time']['ws_value']
 		duration_type=values['duration_time']['ws_type']
 		if duration_type=='integer':
@@ -433,9 +446,7 @@ class Device:
 		thread_read_videocam.join()
 		thread_delta_timer.join()
 				
-		print(f'\t [OK!] Dataset read:\n'
-			  f'\t {self.dataset}')
-		     
+		print(f'\t [OK!] Dataset was read')
 		return 0
 				
 	def get_status_id(self,_status_name):
