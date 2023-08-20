@@ -23,7 +23,7 @@ dataset_options:
       mb_reg_name: null
       mb_reg_address: null
       mb_reg_type: null
-      mb_decimals: null
+      mb_decimals: 6
     time_reading:
       ws_name: длительность считывания вектора
       ws_value: time_reading
@@ -33,7 +33,7 @@ dataset_options:
       mb_reg_name: null
       mb_reg_address: null
       mb_reg_type: null
-      mb_decimals: null
+      mb_decimals: 6
     co2:
       ws_name: концентрация CO2
       ws_value: co2

@@ -184,30 +184,43 @@ class Device:
 		# формирование таблицы DataFrame из списка данных
 		dataframe=pd.DataFrame(self.dataset,columns=columns_name)
 		
-		# форматирование и обработка данных
-		# TO DO
+		# формирование типов данных для dataframe
+		dataset_options=self.results_manifest['dataset_options']
+		values=dataset_options['values']
+		columns_type={}
+		for name in columns_name:
+			if values[name]['mb_reg_type']=='uint16_t' and values[name]['mb_decimals']==0:
+				columns_type[name]=np.uint16
+			elif values[name]['mb_reg_type']=='uint16_t' and values[name]['mb_decimals']>0:
+				columns_type[name]=np.float64
+			else:
+				columns_type[name]=np.float64
+		print(f"\t [OK!] New types defined for dataframe:\n {columns_type}")
 		
+		# преобразование типов данных 
+		dataframe=dataframe.astype(columns_type)
+		
+		# формирование величины округления и сдвига запятой десятичной части в dataframe
+		dataset_options=self.results_manifest['dataset_options']
+		values=dataset_options['values']
+		columns_decimal={}
+		for name in columns_name:
+			columns_decimal[name]=values[name]['mb_decimals']
+		print(f"\t [OK!] Comma shift defined fot dataframe:\n {columns_decimal}")
+				
+		# сдвиг десятичной запятой и округление
+		for name in columns_name:
+			if  values[name]['mb_reg_type']!=None: # что соответствует !='null' в .yaml
+				dataframe[name]=dataframe[name]*pow(10,-columns_decimal[name])
+		dataframe=dataframe.round(columns_decimal)
+		print(f"\t [OK!] Dataset shift and rounding done")
+				
 		# запись данных во временный файл
 		separator=';' # разделитель данных в выходном файле
 		decimal=','   # разделитель дробной чати в выходном файле
 		dataframe.to_csv(path_or_buf=temp_datafile_name, sep=separator, decimal=decimal)
 		print(f"\t [OK!] The dataset is written to a temporary file : {temp_datafile_name}")
 				
-		'''
-		
-		# коррекция типа данных таблицы
-		data_frame=data_frame.astype({x:self.data_type[x][0] for x in self.data_type})
-		# преобразование данных - сдвиг десятичной запятой
-		for x in self.data_type:
-			data_frame[x]=data_frame[x]*pow(10,int(self.data_type[x][1]))
-		# округление числовых данных
-		round_type = {x: abs(self.data_type[x][1]) for x in self.data_type}
-		round_type['time_start']=6
-		round_type['time_reading']=6
-		data_frame=data_frame.round(round_type)
-		
-		'''
-			
 		# операции копирования и удаления над файлами
 		for key, item in self.output_files.items():
 			file_name=self.output_files[key]
@@ -484,6 +497,7 @@ class Device:
 			return result
 		except:
 			print(f'\t [CRASH!] File {_file_name} has NOT been read')
+			sys.exit()
 	
 	def _write_yaml_file(self, _file_name, _data):
 		'''
