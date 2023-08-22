@@ -38,6 +38,7 @@ if __name__=="__main__":
 		      f'[Enter status...]:')
 	status_dictionary=device.get_status_dictionary()
 	print(f'\t          ',end='')
+	
 	for key, value in status_dictionary.items():
 		print(f'"{key}" ', end='')
 	print('\n')
@@ -84,14 +85,16 @@ if __name__=="__main__":
 					if device.down_options_data()==0:
 						if device.up_initional_flag()==0:
 							if device.start_experiment()==0:
-								if device.processing_dataset()==0:
-									if device.push_data_files()==0:
-										# TO DO
-										# обработка введного режима
-										if device.get_status_device()=='offline':
-											device.push_unreserve_claims()
-											break
-										continue
+								if device.up_dataset()==0:
+									if device.finish_experiment()==0:
+										if device.processing_dataset()==0:
+											if device.push_data_files()==0:
+												# TO DO
+												# обработка введного режима
+												if device.get_status_device()=='offline':
+													device.push_unreserve_claims()
+													break
+												continue
 				device.push_unfix_claim()
 				device.push_unreserve_claims()
 				if device.get_status_device()!='offline':

@@ -50,28 +50,35 @@ class Device:
 		self.connections_config_file='./config/connections_config.yaml' # файл сетевой конфигурации
 		self.connections_config=None	# структура данных c с параметрами сетевой конфигурации 
 		self.dataset=[]					# выходной набор данных
+		self.delta_time=0				# время дискретизация выходных данных эксперимента
 		self.device_identifiers=None	# идентификаторы экспериментальной установки
 		self.db_config=None				# параметры входа в базу данных
 		self.db_connection=None			# коннектор базы данных
 		self.dv_connection=None			# коннектор промышленной шины
+		self.duration_time=0			# длительность отдельного эксперимента
 		self.experiment_manifest_file='./config/experiment_manifest.yaml' # файл общей конфигурации эксперимента
 		self.experiment_manifest=None   # структура данных манифеста эксперимента 
+		self.fix_claim_id=0				# идентификатор зафиксированной заявки
+		self.mb_args_dataset={}			# словарь аргументов для modbus команды считывания группы регистров
+		self.offline_message=None		# сообщение передаваемое при нештатном выходе в offline
+		self.options_data=None			# структура со значениями данными для проведения эксперимента
 		self.options_manifest_file='./config/options_manifest.yaml' # файл общей конфигурации эксперимента
 		self.options_manifest=None      # структура данных манифеста параметров 
+		self.option_manifest=None    	# структура json со спецификациями эксперимента
+		self.output_files={}			# словарь выходных файлов для отправки на сервер
 		self.results_manifest_file='./config/results_manifest.yaml' # файл общей конфигурации эксперимента
 		self.results_manifest=None      # структура данных результатов эксперимента
-		self.options_data=None			# структура со значениями данными для проведения эксперимента
-		self.status_device=None    		# текущий статус установки
-		self.option_manifest=None    	# структура json со спецификациями эксперимента
-		self.fix_claim_id=0				# идентификатор зафиксированной заявки
-		self.status_dictionary=None   	# список возможных статусов
-		self.init_controller()			# вызов дополнительной процедуры инициализации
-		self.offline_message=None		# сообщение передаваемое при нештатном выходе в offline
+		self.status_device=None			# текущий статус установки
+		self.status_dictionary=None		# список возможных статусов
+		self.temp_output_files={}		# словарь временных выходных файлов
+		self.thread_read_videocam=None	# поток записи видео
+		self.thread_delta_timer=None	# поток таймера дискретизации
 		self.videocam=None				# экземпляр класса видеокамеры
 		self.videocam_out=None			# экземпляр класса выходного видео файла
-		self.output_files={}			# словарь выходных файлов для отправки на сервер
-		self.temp_output_files={}		# словарь временных выходных файлов
-	
+		
+		# действия инициализации контроллера
+		self.init_controller()			# вызов дополнительной процедуры инициализации
+			
 	def init_controller(self):
 		'''
 		Инициализировать контроллер эксперимента
@@ -144,6 +151,9 @@ class Device:
 		'''
 		Обработать наборы данных. Сформировать выходные файлы
 		'''
+		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
+		      f'[{self.status_device}]: ',end=' ')
+		print(f'Data set processing...')
 		# подготовка параметров временного видео файла
 		video_options=self.results_manifest['video_options']
 		values=video_options['values']
@@ -171,6 +181,7 @@ class Device:
 		# подготовка параметров целевого файла данных
 		datafile_name=self.fix_claim_id + '_' + datafile_suffix + '.' + datafile_extension
 		self.output_files[datafile_suffix]=datafile_name # добавление имени файла в словарь
+		print(f"\t Parameters of temporary and target files are formed")
 		
 		# формирование названия полей таблицы данных
 		dataset_options=self.results_manifest['dataset_options']
@@ -183,6 +194,7 @@ class Device:
 		
 		# формирование таблицы DataFrame из списка данных
 		dataframe=pd.DataFrame(self.dataset,columns=columns_name)
+		print(f"\t [OK!] DataFrame table formed")
 		
 		# формирование типов данных для dataframe
 		dataset_options=self.results_manifest['dataset_options']
@@ -199,6 +211,7 @@ class Device:
 		
 		# преобразование типов данных 
 		dataframe=dataframe.astype(columns_type)
+		print(f"\t [OK!] DataFrame table type conversion done")
 		
 		# формирование величины округления и сдвига запятой десятичной части в dataframe
 		dataset_options=self.results_manifest['dataset_options']
@@ -233,6 +246,7 @@ class Device:
 				self.offline_message=f'File {file_name} not exist'
 				print(f" \t [CRASH!] {self.offline_message}")
 				return 1
+		print(f"\t [OK!] File copy and delete operations completed")
 		return 0		
 	
 	def pull_options_data(self):
@@ -315,6 +329,9 @@ class Device:
 		'''
 		Подготовить и отправить файлы с наборами данных на сервер
 		'''
+		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
+		      f'[{self.status_device}]: ',end=' ')
+		print(f'Sending data files to the server...')
 		# формирование параметров связи с файл-сервером
 		fileserver_config=self.connections_config['fileserver_config']
 		user=fileserver_config['user']
@@ -382,6 +399,7 @@ class Device:
 		'''
 		Резрешать периодически чтение вектора данных с устройства
 		'''
+		event_start_experiment.wait()
 		while event_start_experiment.is_set():
 			event_up_vector.set()
 			time.sleep(_delta_time)
@@ -398,70 +416,61 @@ class Device:
 	
 	def start_experiment(self):
 		'''
-		Проведение эксперимента 
+		Инициализация запуска эксперимента  
 		'''
-		print(f'\t [ОК!] The experiment started...')
-		
+		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
+		      f'[{self.status_device}]: ',end=' ')
+		print(f'The experiment starting...')
+				
 		# инициализация видео камеры и запуск процесса записи
 		self._init_videocam()
-		thread_read_videocam=threading.Thread(name='thread_read_videocam',\
+		self.thread_read_videocam=threading.Thread(name='thread_read_videocam',\
 											  target=self._read_videocam)
-		thread_read_videocam.daemon = True
-		thread_read_videocam.start()
-		event_start_experiment.set()
-						
-		# формирование аргументов modbus функции чтения input регистров
-		args=self._get_args_dataset(md_reg_name='input')
-		address=args['registeraddress']
-		number=args['number_of_registers']
-		code=args['functioncode']
-		
+		self.thread_read_videocam.daemon = True
+		self.thread_read_videocam.start()
+								
 		# чтение манифеста параметров эксперимента - options_manifest
 		options_data=self.options_data['time_options']
 		values=options_data['values']
-		delta_time=values['delta_time']['ws_value']
+		self.delta_time=values['delta_time']['ws_value']
 		
 		# настройка длительности эксперимента
-		duration_time_str=values['duration_time']['ws_value']
-		duration_type=values['duration_time']['ws_type']
+		duration_time_str=str(values["duration_time"]["ws_value"])
+		duration_type=values["duration_time"]['ws_type']
 		if duration_type=='integer':
-			duration_time=int(duration_time_str)
+			self.duration_time=int(duration_time_str)
 		elif duration_type=='float':
-			duration_time=float(duration_time)
+			self.duration_time=float(duration_time_str)
 		
 		# Запуск потока установки разрешения чтения вектора данных
-		thread_delta_timer=threading.Thread(name='thread_delta_timer',\
+		self.thread_delta_timer=threading.Thread(name='thread_delta_timer',\
 											  target=self._delta_timer,\
-											  args=(delta_time,))
-		thread_delta_timer.daemon = True
-		thread_delta_timer.start()
+											  args=(self.delta_time,))
+		self.thread_delta_timer.daemon = True
+		self.thread_delta_timer.start()
 		
-		# формирование выходного вектора
-		t=0
-		while t<duration_time:
-			event_up_vector.wait()
-			event_up_vector.clear()
-			time_start=dt.datetime.now().timestamp()
-			try:
-				dataset_vector=self.dv_connection.read_registers(registeraddress=address,\
-																number_of_registers=number,\
-																functioncode=code)	
-				time_reading=dt.datetime.now().timestamp()-time_start
-				self.dataset.append([time_start, time_reading]+ dataset_vector)
-				
-				t=t+delta_time
-			except:
-				self.offline_message='Dataset vector NOT read by modbus'
-				print(f'\t [CRASH!] {message}')
-				return 1
+		# установка флага начала эксперимента
+		event_start_experiment.set()
 		
-		event_start_experiment.clear()
-		thread_read_videocam.join()
-		thread_delta_timer.join()
-				
-		print(f'\t [OK!] Dataset was read')
+		print(f'\t [OK!] The experiment has start')
 		return 0
-				
+					
+	def finish_experiment(self):
+		'''
+		Инициализировать окончание эксперимента
+		'''
+		event_start_experiment.clear()
+		self.thread_read_videocam.join()
+		self.thread_delta_timer.join()
+		print(f'\t [OK!] The experiment has finished')
+		return 0
+			
+	def get_db_config(self):
+		'''
+		Получить предыдущий статус контроллера 
+		'''
+		return self.db_config
+	
 	def get_status_id(self,_status_name):
 		'''
 		Возвращает id кодировку названия статуса
@@ -476,16 +485,10 @@ class Device:
 		
 	def get_status_dictionary(self):
 		'''
-		Получить предыдущий статус контроллера 
+		Получить словарь возможных статусов 
 		'''
 		return self.status_dictionary
 		
-	def get_db_config(self):
-		'''
-		Получить предыдущий статус контроллера 
-		'''
-		return self.db_config	
-	
 	def _read_yaml_file(self, _file_name):
 		'''
 		Прочитать файл в формате .yaml
@@ -737,9 +740,11 @@ class Device:
 		return 0
 		
 		
-	def _get_args_dataset(self, md_reg_name='input'):
+	def _get_args_dataset(self, mb_reg_name='input'):
 		'''
-		Сформировать словарь аргументов для команды modbus считывания вектора выходных данных из input регистров 
+		Сформировать словарь аргументов для modbus команды  считывания вектора выходных данных
+		из input регистров файла results_manifest
+		Возвращает словарь аргументов для modbus команды считывания группы регистров
 		'''
 		args_dataset_command={}
 		# формирование параметров выходных данных - result_manifest.yaml
@@ -750,7 +755,7 @@ class Device:
 		# формируется только один диапазон не битовых регистров для считывания
 		min_max_registers={'min':65535,'max':0}
 		for k, v in values.items():
-			if v['mb_reg_type']!='bit' and v['mb_reg_name']==md_reg_name:
+			if v['mb_reg_type']!='bit' and v['mb_reg_name']==mb_reg_name:
 				if v['mb_reg_address']<min_max_registers['min']:
 					min_max_registers['min']=v['mb_reg_address']
 				if v['mb_reg_address']>min_max_registers['max']:
@@ -759,13 +764,13 @@ class Device:
 		#!!! нужно предусмотреть проверку правильности инеми регистров
 		
 		# формирование словаря аргументов modbus функции для группового считывания выходных регистров данных
-		function_code = 4
+		function_code = 4 if mb_reg_name=='input' else (3 if mb_reg_name=='holding' else -1)
 		address=min_max_registers['min']
 		number=min_max_registers['max']-min_max_registers['min']+1
-		dataset_command_args={'registeraddress': address, 'number_of_registers': number,  'functioncode': function_code}
+		mb_args_dataset={'function_code': function_code, 'register_address': address, 'number_of_registers': number}
 		print(f'\t [OK!] Created a list of argumentes:\n'
-		      f'\t       {dataset_command_args}')
-		return dataset_command_args
+		      f'\t       {mb_args_dataset}')
+		return mb_args_dataset
 		
 	def get_mb_initial_commands(self):
 		'''
@@ -787,15 +792,41 @@ class Device:
 		
 		return mb_initial_commands
 	
+	def up_dataset(self):
+		'''
+		Считать с объекта весь набор данных эксперимента
+		'''	
+					
+		# формирование выходного вектора
+		t=0
+		while t<self.duration_time:
+			event_up_vector.wait()
+			event_up_vector.clear()
+			time_start=dt.datetime.now().timestamp()
+			try:
+				dataset_vector=self.dv_connection.read_registers(registeraddress=self.mb_args_dataset['register_address'],\
+																number_of_registers=self.mb_args_dataset['number_of_registers'],\
+																functioncode=self.mb_args_dataset['function_code'])	
+				time_reading=dt.datetime.now().timestamp()-time_start
+				self.dataset.append([time_start, time_reading]+ dataset_vector)
+				
+				t=t+self.delta_time
+			except:
+				self.offline_message='Dataset vector NOT read by modbus'
+				print(f'\t [CRASH!] {self.offline_message}')
+				return 1
+		print(f'\t [OK] Data set received from device')
+		return 0
+	
 	def up_dataset_vector(self):
 		'''
 		Считать с объекта вектор выходных параметров
 		'''	
 		# формирование аргументов modbus функции чтения input регистров
-		args=self._get_args_dataset(md_reg_name='input')
-		address=args['registeraddress']
-		number=args['number_of_registers']
-		code=args['functioncode']
+		self.mb_args_dataset=self._get_args_dataset(mb_reg_name='input')
+		address=self.mb_args_dataset['register_address']
+		number=self.mb_args_dataset['number_of_registers']
+		code=self.mb_args_dataset['function_code']
 		# чтение манифеста параметров эксперимента - options_manifest.yaml
 		dataset_options=self.options_manifest['time_options']
 		values=dataset_options['values']
