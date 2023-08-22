@@ -449,6 +449,18 @@ class Device:
 		self.thread_delta_timer.daemon = True
 		self.thread_delta_timer.start()
 		
+		# Отправка на сервер времени начала эксперимента 
+		try:
+			db_cursor=self.db_connection.cursor()
+			routin_parameters=[self.device_identifiers['hash_key'], self.fix_claim_id, 'start']
+			db_cursor.callproc("push_claim_time",routin_parameters)
+			self.db_connection.commit()
+			print(f'\t [ОК!] Unix start time push to server')
+		except:
+			self.offline_message=f'Unix start time NOT push to server'
+			print(f'\t [CRASH!] {self.offline_message}')
+			return 1
+		
 		# установка флага начала эксперимента
 		event_start_experiment.set()
 		
@@ -462,6 +474,19 @@ class Device:
 		event_start_experiment.clear()
 		self.thread_read_videocam.join()
 		self.thread_delta_timer.join()
+		
+		# Отправка на сервер времени окончания эксперимента 
+		try:
+			db_cursor=self.db_connection.cursor()
+			routin_parameters=[self.device_identifiers['hash_key'], self.fix_claim_id, 'finish']
+			db_cursor.callproc("push_claim_time",routin_parameters)
+			self.db_connection.commit()
+			print(f'\t [ОК!] Unix finish time push to server')
+		except:
+			self.offline_message=f'Unix finish time NOT push to server'
+			print(f'\t [CRASH!] {self.offline_message}')
+			return 1
+				
 		print(f'\t [OK!] The experiment has finished')
 		return 0
 			
