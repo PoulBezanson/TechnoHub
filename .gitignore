@@ -1,6 +1,6 @@
 Devices/captured.*
-Devices/config/connections_config.yaml
 Devices/__pycache__
 Devices/modules/__pycache__
 .gitignore
+Devices/config/connections_config.yaml
 
