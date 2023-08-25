@@ -29,7 +29,7 @@ time_options:
       ws_regexp: null
       ws_value: 1
       ws_control: readonly
-initial state:
+initial_state:
   name: Начальное состояние
   values:
     mute_state:
@@ -40,8 +40,8 @@ initial state:
       ws_value: выкл или вкл
       ws_control: switch
       mb_dictionary:
-        выкл: 0
-        вкл: 1
+        вкл: 0
+        выкл: 1
       mb_reg_name: holding
       mb_reg_address: 17
       mb_reg_type: bit
@@ -52,10 +52,10 @@ model_parameters:
     temperature_unit:
       ws_name: размерность температуры
       ws_dimension: код
-      ws_type: integer
+      ws_type: srting
       ws_regexp: ^[F,C]$
       ws_value: F или C
-      ws_dictionary:
+      mb_dictionary:
         C: 0
         F: 1
       ws_control: switch
@@ -73,6 +73,7 @@ influences:
       ws_regexp: null
       ws_value: 0
       ws_control: readonly
+      mb_dictionary: null
       mb_reg_name: null
       mb_reg_address: null
       mb_reg_type: null

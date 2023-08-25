@@ -1,4 +1,5 @@
-Devices/d1_[0-9]*
+Devices/captured.*
+Devices/config/connections_config.yaml
 Devices/__pycache__
 Devices/modules/__pycache__
 .gitignore

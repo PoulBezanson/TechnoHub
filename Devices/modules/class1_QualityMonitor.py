@@ -132,10 +132,14 @@ class Device:
 	def pull_status_device(self, print_message=True):
 		'''
 		Запросить из базы данных статус установки
-		Возвращает: status_name
+		Возвращает: status_name / 0 
 		'''
 		db_cursor=self.db_connection.cursor()
-		db_cursor.callproc("pull_status_device",[self.device_identifiers['hash_key']])
+		try:	
+			db_cursor.callproc("pull_status_device",[self.device_identifiers['hash_key']])
+		except:
+			print(f'\t [FAULT!] Device status is NOT pulled')
+			return 0
 		_selection = []
 		for s in db_cursor.stored_results():
 			_selection.append(s.fetchall())
@@ -150,6 +154,7 @@ class Device:
 	def processing_dataset(self):
 		'''
 		Обработать наборы данных. Сформировать выходные файлы
+		Возвращает: 0 /
 		'''
 		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 		      f'[{self.status_device}]: ',end=' ')
@@ -407,10 +412,40 @@ class Device:
 		
 	def down_options_data(self):
 		'''
-		Передать на установку парметры эксперимента
+		Передать на установку (в modbus holding регистры) параметры эксперимента
 		'''
-		# TO DO:
-		# TO DO:
+				
+		# Формирование значений параметров эксперимента для modbus регистров
+		reg_values={} # словарь вначений регистров {"номер регистра":"значение",...}
+		parameter_category=['initial_state', 'model_parameters']
+		for name in parameter_category:
+			category=self.options_data[name]
+			values=category['values']
+			for key, value in values.items():
+				reg_address=str(value['mb_reg_address'])
+				str_value=value['ws_value']
+				if value['mb_dictionary']!=None:
+					num_value=value['mb_dictionary'][str_value]
+				else:
+					num_value=int(str_value)
+				if value['ws_value']=='bit':
+					num_value=num_value<<value['mb_decimals']
+				else:
+					num_value=int(num_value*pow(10,value['mb_decimals']))
+				if reg_address in reg_values:
+					reg_values[reg_address]=reg_values[reg_address] | num_value
+				else:
+					reg_values[reg_address]=num_value
+		
+		# Передача значений в регистры и проверка записи
+		for key, value in reg_values.items():
+			self.dv_connection.write_register(registeraddress=int(key), value=value, number_of_decimals=0, functioncode=6)
+			responce=None
+			attampts=3 #количество попыток чтения записанного регистра
+			while value!=responce and attampts>0:
+				responce=self.dv_connection.read_register(registeraddress=int(key), number_of_decimals=0, functioncode=3)
+				attampts+=-1
+				time.sleep(1)
 		print(f'\t [ОК!] Options data down to device')
 		return 0
 	

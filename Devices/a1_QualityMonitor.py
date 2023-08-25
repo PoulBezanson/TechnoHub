@@ -33,16 +33,15 @@ if __name__=="__main__":
 	thread_scan_keyboard.start()
 		
 	# ожидание начальной инициализации статуса
-	device.pull_status_device()
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
-		      f'[Enter status...]:')
-	status_dictionary=device.get_status_dictionary()
+		  f'[Enter new status...]:')
+	if device.pull_status_device()!=0:
+		pass
 	print(f'\t          ',end='')
-	
+	status_dictionary=device.get_status_dictionary()
 	for key, value in status_dictionary.items():
 		print(f'"{key}" ', end='')
 	print('\n')
-	
 	while device.get_status_device()==None:
 		pass
 	
