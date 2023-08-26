@@ -414,38 +414,70 @@ class Device:
 		'''
 		Передать на установку (в modbus holding регистры) параметры эксперимента
 		'''
-				
-		# Формирование значений параметров эксперимента для modbus регистров
-		reg_values={} # словарь вначений регистров {"номер регистра":"значение",...}
 		parameter_category=['initial_state', 'model_parameters']
+		
+		# Формирование значений параметров эксперимента для битовых modbus регистров
+		bit_reg_values={} # словарь pначений регистров {"номер регистра":"значение",...}
+		bit_reg_mask={} # маска битовых регистров
 		for name in parameter_category:
 			category=self.options_data[name]
 			values=category['values']
 			for key, value in values.items():
-				reg_address=str(value['mb_reg_address'])
-				str_value=value['ws_value']
-				if value['mb_dictionary']!=None:
-					num_value=value['mb_dictionary'][str_value]
-				else:
-					num_value=int(str_value)
-				if value['ws_value']=='bit':
-					num_value=num_value<<value['mb_decimals']
-				else:
-					num_value=int(num_value*pow(10,value['mb_decimals']))
-				if reg_address in reg_values:
-					reg_values[reg_address]=reg_values[reg_address] | num_value
-				else:
-					reg_values[reg_address]=num_value
+				if value['mb_reg_type']=='bit':	
+					reg_address=str(value['mb_reg_address'])
+					str_value=value['ws_value']
+					if value['mb_dictionary']!=None:
+						num_value=value['mb_dictionary'][str_value]
+					else:
+						num_value=int(str_value)
+					
+					num_value=int(num_value)<<int(value['mb_decimals'])
+					mask=1<<int(value['mb_decimals'])
+					if reg_address in bit_reg_values:
+						bit_reg_values[reg_address] |= num_value
+						bit_reg_mask[reg_address] |= mask
+					else:
+						bit_reg_values[reg_address]=num_value
+						bit_reg_mask[reg_address] = mask
 		
-		# Передача значений в регистры и проверка записи
-		for key, value in reg_values.items():
-			self.dv_connection.write_register(registeraddress=int(key), value=value, number_of_decimals=0, functioncode=6)
-			responce=None
-			attampts=3 #количество попыток чтения записанного регистра
-			while value!=responce and attampts>0:
-				responce=self.dv_connection.read_register(registeraddress=int(key), number_of_decimals=0, functioncode=3)
-				attampts+=-1
-				time.sleep(1)
+		# Запись значений в битовые modbus регистры
+		for key, val in bit_reg_values.items():	
+			try:
+				mask=bit_reg_mask[key]
+				old_val=self.dv_connection.read_register(registeraddress=int(key), number_of_decimals=0, functioncode=3)
+				new_val=int(((val^old_val)&mask)^old_val) # сохранение других бит регистра и обновление заданных 
+				self.dv_connection.write_register(registeraddress=int(key), value=new_val, number_of_decimals=0, functioncode=6)
+			except:
+				self.offline_message=f'UNABLE to write options data to modbus bit reg{key}={new_val}'
+				print(f'\t [CRASH!] {self.offline_message}')
+				return 1
+						
+		# Формирование значений параметров эксперимента для числовых modbus регистров
+		reg_values={} # словарь pначений регистров {"номер регистра":"значение",...}
+		reg_decimals={} # количество знаков после запятой
+		for name in parameter_category:
+			category=self.options_data[name]
+			values=category['values']
+			for key, value in values.items():
+				if value['mb_reg_type']!='bit':
+					reg_address=str(value['mb_reg_address'])
+					str_value=value['ws_value']
+					if value['mb_dictionary']!=None:
+						num_value=value['mb_dictionary'][str_value]
+					else:
+						num_value=str_value
+					reg_values[reg_address]=num_value
+					reg_decimals=value['mb_decimals']
+		
+		# Запись значений в числовые modbus регистры
+		for key, val in reg_values.items():	
+			try:	
+				self.dv_connection.write_register(registeraddress=int(key), value=val, number_of_decimals=0, functioncode=6)
+			except:
+				self.offline_message=f'UNABLE to write options data to modbus value-register {key}'
+				print(f'\t [CRASH!] {self.offline_message}')
+				return 1
+		
 		print(f'\t [ОК!] Options data down to device')
 		return 0
 	
