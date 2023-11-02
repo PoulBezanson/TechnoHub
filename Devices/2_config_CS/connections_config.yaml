@@ -1,0 +1,23 @@
+# идентификаторы установки
+device_identifiers:
+  id_device: a1
+  hash_key: 8804b613
+# конфигурация базы данных
+db_config:
+  host: 91.122.14.126
+  database: technohub
+  user: orangepi
+  password: mariadb
+# конфигурация сети modbus
+modbus_config:
+  port_name: /dev/ttyUSB0
+  slave_address: 100
+  baud_rate: 9600
+  byte_size: 8
+  stop_bits: 1
+  time_out: 0.1
+# конфигурация файлового сервера
+fileserver_config:
+  user: technohub
+  host: 91.122.14.126
+  folder: /var/www/technohub/EXPERIMENT/TMP  

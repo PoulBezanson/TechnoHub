@@ -1,0 +1,89 @@
+time_options:
+  name: Временные параметры
+  values:
+    duration_time:
+      ws_name: длительность эксперимента
+      ws_dimension: сек
+      ws_type: integer
+      ws_regexp: ^([1-9]|10)$
+      ws_value: целое число 1 от до 10
+      ws_control: field
+    start_time:
+      ws_name: время начала модельное
+      ws_dimension: сек
+      ws_type: integer
+      ws_regexp: ^([1-9]|10)$
+      ws_value: текущее
+      ws_control: readonly
+    delta_time:
+      ws_name: время дискретизации
+      ws_dimension: сек
+      ws_type: float
+      ws_regexp: null
+      ws_value: 0.1
+      ws_control: readonly
+    scale_time:
+      ws_name: масштаб времени
+      ws_dimension: б/р
+      ws_type: float
+      ws_regexp: null
+      ws_value: 1
+      ws_control: readonly
+initial_state:
+  name: Начальное состояние
+  values:
+    mute_state:
+      ws_name: звуковая сигнализация
+      ws_dimension: состояние
+      ws_type: integer
+      ws_regexp: ^(выкл|вкл)$
+      ws_value: выкл или вкл
+      ws_control: switch
+      mb_dictionary:
+        вкл: 0
+        выкл: 1
+      mb_reg_name: holding
+      mb_reg_address: 17
+      mb_reg_type: bit
+      mb_decimals: 0
+model_parameters:
+  name: Параметры модели
+  values:
+    temperature_unit:
+      ws_name: размерность температуры
+      ws_dimension: код
+      ws_type: srting
+      ws_regexp: ^[F,C]$
+      ws_value: F или C
+      mb_dictionary:
+        C: 0
+        F: 1
+      ws_control: switch
+      mb_reg_name: holding
+      mb_reg_address: 17
+      mb_reg_type: bit
+      mb_decimals: 1
+influences:
+  name: Параметры внешней среды
+  values:
+    air_flow:
+      ws_name: величина потока воздуха
+      ws_dimension: куб.м в сек.
+      ws_type: string
+      ws_regexp: null
+      ws_value: 0
+      ws_control: readonly
+      mb_dictionary: null
+      mb_reg_name: null
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: 0
+comments:
+  name: Комментарии к эксперименту
+  values:
+    comment:
+      ws_name: Комментарий
+      ws_regexp: ^(?!.*краткий\sкомментарий).*
+      ws_value: краткий комментарий
+      ws_control: field
+      ws_dimension: null

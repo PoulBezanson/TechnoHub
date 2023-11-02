@@ -1,0 +1,130 @@
+dataset_options: # временные параметры эксперимента
+  name: Параметры выходных данных
+  values:
+    datafile_extension: 
+      ws_name: формат файла данных
+      ws_value: csv
+      ws_dimension:
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: null # input, holding
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: null
+    time_start:  
+      ws_name: время измерения вектора 
+      ws_value: null
+      ws_dimension: сек
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: null # input, holding
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: null
+    time_reading:  
+      ws_name: длительность считывания вектора
+      ws_value: null
+      ws_dimension: сек
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: null # input, holding
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: null 
+    co2:  
+      ws_name: концентрация CO2
+      ws_value: null
+      ws_dimension: ppm
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: input # input, holding
+      mb_reg_address: 0
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+    tvoc:
+      ws_name: концентрация ЛОС
+      ws_value: null
+      ws_dimension: мг/м^3
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: input # input, holding
+      mb_reg_address: 1
+      mb_reg_type: uint16_t
+      mb_decimals: 2
+    pm1_0:  
+      ws_name: концентрация частиц PM1.0
+      ws_value: null
+      ws_dimension: мкг/м^3
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: input # input, holding
+      mb_reg_address: 2
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+    pm2_5:  
+      ws_name: концентрация частиц PM2.5
+      ws_value: null
+      ws_dimension: мкг/м^3
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: input # input, holding
+      mb_reg_address: 3
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+    pm10:  
+      ws_name: концентрация частиц PM10
+      ws_value: null
+      ws_dimension: мкг/м^3
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: input # input, holding
+      mb_reg_address: 4
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+    temperature:
+      ws_name: концентрация частиц PM10
+      ws_value: null
+      ws_dimension: гр
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: input # input, holding
+      mb_reg_address: 5
+      mb_reg_type: uint16_t
+      mb_decimals: 1
+    humidity: 
+      ws_name: концентрация частиц PM10
+      ws_value: null
+      ws_dimension: процент
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: input # input, holding
+      mb_reg_address: 6
+      mb_reg_type: uint16_t
+      mb_decimals: 1 
+video_options: # временные параметры эксперимента
+  name: Параметры выходного видеофайла
+  values:
+    extension:
+      ws_name: формат видеофайла
+      ws_value: mp4
+      ws_dimension: null
+      ws_regexp: .*
+      ws_control: readonly
+    codec:
+      ws_name: кодек видео видеофайла
+      ws_value: mp4v
+      ws_dimension: null
+      ws_regexp: .*
+      ws_control: readonly
+    fps:
+      ws_name: частота кадров
+      ws_value: 23.0
+      ws_dimension: кадр/сек
+      ws_regexp: .*
+      ws_control: readonly
+    size:  
+      ws_name: качество картинки
+      ws_value: (640, 480)
+      ws_dimension: (точек,точек)
+      ws_regexp: .*
+      ws_control: readonly

@@ -47,7 +47,8 @@ class Device:
 		Конструктор
 		'''
 		self.bus_config=None			# параметры соединения с промышленной шиной
-		self.connections_config_file='./config/connections_config.yaml' # файл сетевой конфигурации
+		self.config_folder='./1_config_AQM'
+		self.connections_config_file='connections_config.yaml' # файл сетевой конфигурации
 		self.connections_config=None	# структура данных c с параметрами сетевой конфигурации 
 		self.dataset=[]					# выходной набор данных
 		self.delta_time=0				# время дискретизация выходных данных эксперимента
@@ -56,17 +57,17 @@ class Device:
 		self.db_connection=None			# коннектор базы данных
 		self.dv_connection=None			# коннектор промышленной шины
 		self.duration_time=0			# длительность отдельного эксперимента
-		self.experiment_manifest_file='./config/experiment_manifest.yaml' # файл общей конфигурации эксперимента
+		self.experiment_manifest_file='experiment_manifest.yaml' # файл общей конфигурации эксперимента
 		self.experiment_manifest=None   # структура данных манифеста эксперимента 
 		self.fix_claim_id=0				# идентификатор зафиксированной заявки
 		self.mb_args_dataset={}			# словарь аргументов для modbus команды считывания группы регистров
 		self.offline_message=None		# сообщение передаваемое при нештатном выходе в offline
 		self.options_data=None			# структура со значениями данными для проведения эксперимента
-		self.options_manifest_file='./config/options_manifest.yaml' # файл общей конфигурации эксперимента
+		self.options_manifest_file='options_manifest.yaml' # файл общей конфигурации эксперимента
 		self.options_manifest=None      # структура данных манифеста параметров 
 		self.option_manifest=None    	# структура json со спецификациями эксперимента
 		self.output_files={}			# словарь выходных файлов для отправки на сервер
-		self.results_manifest_file='./config/results_manifest.yaml' # файл общей конфигурации эксперимента
+		self.results_manifest_file='results_manifest.yaml' # файл общей конфигурации эксперимента
 		self.results_manifest=None      # структура данных результатов эксперимента
 		self.status_device=None			# текущий статус установки
 		self.status_dictionary=None		# список возможных статусов
@@ -85,7 +86,13 @@ class Device:
 		'''
 		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 			f'[Controller initialization...]:')
-				
+		
+		# формирование полных путей конфигурационных файлов
+		self.connections_config_file=self.config_folder+'/'+self.connections_config_file
+		self.experiment_manifest_file=self.config_folder+'/'+self.experiment_manifest_file
+		self.options_manifest_file=self.config_folder+'/'+self.options_manifest_file
+		self.results_manifest_file=self.config_folder+'/'+self.results_manifest_file
+		
 		# чтение файла сетевой конфигурации .yaml и идентификация установки
 		self.connections_config=self._read_yaml_file(self.connections_config_file)
 		self.device_identifiers=self.connections_config['device_identifiers']
@@ -134,8 +141,9 @@ class Device:
 		Запросить из базы данных статус установки
 		Возвращает: status_name / 0 
 		'''
-		db_cursor=self.db_connection.cursor()
+		#!!! зависает при обрыве соединения
 		try:	
+			db_cursor=self.db_connection.cursor()
 			db_cursor.callproc("pull_status_device",[self.device_identifiers['hash_key']])
 		except:
 			print(f'\t [FAULT!] Device status is NOT pulled')
@@ -224,7 +232,7 @@ class Device:
 		columns_decimal={}
 		for name in columns_name:
 			columns_decimal[name]=values[name]['mb_decimals']
-		print(f"\t [OK!] Comma shift defined fot dataframe:\n {columns_decimal}")
+		print(f"\t [OK!] Comma shift defined for dataframe:\n {columns_decimal}")
 				
 		# сдвиг десятичной запятой и округление
 		for name in columns_name:
@@ -648,7 +656,7 @@ class Device:
 			routin_parameters.append(self.experiment_manifest['owner'])
 			routin_parameters.append(self.experiment_manifest['address'])
 			routin_parameters.append(self.experiment_manifest['contacts'])
-			routin_parameters.append(0) # обновление поля date_update (0 -нет, 1 - да)
+			routin_parameters.append(1) # обновление поля date_update (0 -нет, 1 - да)
 			print(f'\t [ОК!] Data for database prepared')
 			
 			# запись данных в базу данных
@@ -680,9 +688,14 @@ class Device:
 		max_reserved_claims_values=values['max_reserved_claims']
 		max_reserved_claims=max_reserved_claims_values['value']
 		# запрос на резервирование заявок
-		db_cursor=self.db_connection.cursor()
-		db_cursor.callproc("push_reserve_claims",[hash_key, max_reserved_claims])
-		self.db_connection.commit()
+		try:
+			db_cursor=self.db_connection.cursor()
+			db_cursor.callproc("push_reserve_claims",[hash_key, max_reserved_claims])
+			self.db_connection.commit()
+		except:
+			print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
+			f'[waiting connection]...',end='\n')
+			return 0
 		# обработка ответа базы данных
 		_response = []
 		for s in db_cursor.stored_results():
