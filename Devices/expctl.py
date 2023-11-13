@@ -14,7 +14,7 @@ sys.path.insert(0, "/home/orangepi/projects/TechnoHub/Devices/modules/")
 import datetime as dt
 import time
 import threading 
-import expc_class as dv
+import expctl_class as dv
 
 if __name__=="__main__":
 	'''

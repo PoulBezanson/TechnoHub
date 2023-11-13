@@ -47,7 +47,7 @@ class Device:
 		Конструктор
 		'''
 		self.bus_config=None			# параметры соединения с промышленной шиной
-		self.config_folder='./1_config_AQM'
+		self.config_folder='./1_config_aqm'
 		self.connections_config_file='connections_config.yaml' # файл сетевой конфигурации
 		self.connections_config=None	# структура данных c с параметрами сетевой конфигурации 
 		self.dataset=[]					# выходной набор данных
@@ -209,21 +209,21 @@ class Device:
 		dataframe=pd.DataFrame(self.dataset,columns=columns_name)
 		print(f"\t [OK!] DataFrame table formed")
 		
-		# формирование типов данных для dataframe
+		# преобразование типов данных для dataframe
 		dataset_options=self.results_manifest['dataset_options']
 		values=dataset_options['values']
 		columns_type={}
 		for name in columns_name:
-			if values[name]['mb_reg_type']=='uint16_t' and values[name]['mb_decimals']==0:
+			if values[name]['mb_reg_type']=='uint16_t':
 				columns_type[name]=np.uint16
-			elif values[name]['mb_reg_type']=='uint16_t' and values[name]['mb_decimals']>0:
+			if values[name]['mb_reg_type']=='int16_t':
+				columns_type[name]=np.int16
+		dataframe=dataframe.astype(columns_type)	
+		columns_type={}
+		for name in columns_name:
+			if values[name]['mb_decimals']>0:
 				columns_type[name]=np.float64
-			else:
-				columns_type[name]=np.float64
-		print(f"\t [OK!] New types defined for dataframe:\n {columns_type}")
-		
-		# преобразование типов данных 
-		dataframe=dataframe.astype(columns_type)
+		dataframe=dataframe.astype(columns_type)	
 		print(f"\t [OK!] DataFrame table type conversion done")
 		
 		# формирование величины округления и сдвига запятой десятичной части в dataframe
@@ -233,7 +233,7 @@ class Device:
 		for name in columns_name:
 			columns_decimal[name]=values[name]['mb_decimals']
 		print(f"\t [OK!] Comma shift defined for dataframe:\n {columns_decimal}")
-				
+		
 		# сдвиг десятичной запятой и округление
 		for name in columns_name:
 			if  values[name]['mb_reg_type']!=None: # что соответствует !='null' в .yaml
@@ -498,7 +498,9 @@ class Device:
 		print(f'The experiment starting...')
 				
 		# инициализация видео камеры и запуск процесса записи
-		self._init_videocam()
+		if self._init_videocam()==1:
+			return 1
+			
 		self.thread_read_videocam=threading.Thread(name='thread_read_videocam',\
 											  target=self._read_videocam)
 		self.thread_read_videocam.daemon = True
@@ -836,7 +838,6 @@ class Device:
 		if not self.videocam.isOpened():
 			self.offline_message=f'Can`t capture the videocam'
 			print(f'\t [CRASH!] {self.offline_message}')
-			sys.exit()
 			return 1
 		videocodec=cv2.VideoWriter_fourcc(*videofile_codec)
 		temp_videofile_name=temp_videofile_name + '.' + videofile_extension
