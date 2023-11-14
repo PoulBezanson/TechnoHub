@@ -1,3 +1,4 @@
+#include <Servo.h>
 #include <ModbusRtu.h>
 #include <SimpleKeypad.h>
 #include <LCD_1602_RUS.h>
@@ -7,12 +8,23 @@
 #include <I2Cdev.h>
 
 
+// Инициализация системы вертикализации
+#define PIN_SERVO_LEFT 53
+#define PIN_SERVO_RIGHT 51
+Servo servo_left;// создадим объект сервопривода
+Servo servo_right;
+int servo_init_left=0; // начальная позиция
+int servo_init_right=180; // начальная позиция
+int Ang; // значение текущего угла сервопривода
+int dAng=0; // значение приращения угла вертикализации (+1 или -1)
+
 // Порты для подключения двигателей
 #define MOTOR_A 6
 #define MOTOR_B 7
 
 #define MIN_POWER 70  // Минимальное управляющее воздействие, которое подается на двигатели
 #define DEFAULT_BIAS 1949 // Целевое значение углового положения относительно платформы
+double tmpBias = 0; // значение поправки целевого угла по результатам калибровки
                           
 #define DEFAULT_CONTROL_PERIOD 10 // Период цикла управления по умолчанию
 
@@ -21,7 +33,7 @@
 #define KP_COLS 4
 
 #define G 16384 // Ускорение свободного падения для акселерометра при диапазоне +-2g
-#define horizontErr (-210) // Калибровочная поправка аксилирометра было 97
+#define horizontErr (-10) // Калибровочная поправка аксилирометра было 97
 
 #define COUNT 5000  // Количество значений для горизонтирования
 
@@ -78,12 +90,19 @@ long angle = 0; // Управляющее воздействие для алго
 long linearStabAngle = 0; // Управляющее воздействие для алгоритма 2
 int angle_bias = DEFAULT_BIAS;  // Целевое угловое положение
 int linear_bias = 0;  // Целевое линейное положение
+int linear_err_limit; // Допустимое значение линейного отклонения перед вертикализацией
+int linear_err; // Ошибка линейного отклонения перед вертикализацией
 
 int chooseAlgorithm = 0;  // Выбранный алгоритм
 
 int flagPrint = 0;  // Признак вывода основого текста при включенной СУД на дисплей
 int fixFlag = 0;  // Признак однозначного определения целевого угла
 
+// коэффициенты ПИД регулятора в последовательности {kPangle, kIangle, kDangle, kPlinear, kIlinear, kDlinear}
+int decimalsPID[6]={0,  3,  1, 2, 0, 0}; // размер десятичной части коэффициентов ПИД регулятора
+double coefficientsPID[3][6]={{0, 0, 0, 0, 0, 0},
+                              {5, 15,  35, 1, 0,  8},
+                              {15, 0,  5,  150,  0,  1 }};
 double kPangle = 5.0;  // Пропорциональный коэффициент ПИД2
 double kIangle = 0.015; // Интегральный коэффициент ПИД2 
 double kDangle = 3.5; // Дифференциальный коэффициент ПИД2
@@ -120,27 +139,44 @@ int maxAngle = 0;  // Максимально достигнутое углово
 int prevMaxLinear = 0;  // Предыдущее максимально достигнутое смещение
 int prevMaxAngle = 0;  // Предыдущее максимально достигнутое угловое отклонение
 
-enum{ // Пространство состояний
-  CALIBRATION,
-  READY,
-  STABILISATION,
-  FALLED
+enum{ // Режимы установки
+  CALIBRATION, READY, STABILISATION, FALLED
 } State;
+
+enum{ // Состояния диодов
+  RYG, RXX, XYX, XXG, XXX
+} DiodeState;
+
+enum{ // Режим отображения дисплея
+  OPTIONS, MENU, MAXVALUES
+} DisplayMode;
 
 
 long computePIDangle(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID = false);
 long computePIDlinear(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID = false);
 
 void setup() {
+  
   TCCR4A = 0b00000011;  // Переключение ШИМ в разрешение 10 бит
-  // включение диодов
+  
+  // перевод системы вертикализации в начальное состояние
+  pinMode(PIN_SERVO_LEFT, OUTPUT);
+  pinMode(PIN_SERVO_RIGHT, OUTPUT);
+  digitalWrite(PIN_SERVO_LEFT,LOW);
+  digitalWrite(PIN_SERVO_RIGHT,LOW);
+  servo_left.attach(PIN_SERVO_LEFT);
+  servo_right.attach(PIN_SERVO_RIGHT);
+  servo_left.write(servo_init_left);
+  servo_right.write(servo_init_right);
+    
+  // инициализация пинов диодов
   pinMode(47, OUTPUT); // желтый диод
-  digitalWrite(47, HIGH);
   pinMode(45, OUTPUT); // зеленый диод
-  digitalWrite(45, HIGH);
   pinMode(43, OUTPUT); // красный диод
-  digitalWrite(43, HIGH);
-
+  
+  // проверка отсветки диодов
+  SetDiodColor(RYG);
+  
   // Включение акселерометра
   pinMode(14, OUTPUT);
   pinMode(15, OUTPUT);
@@ -208,12 +244,35 @@ void setup() {
   // Вывод текста на дисплей
   LCD.clear();
   LCD.setCursor(0, 0);
-  LCD.print("leveling...");
+  LCD.print("Leveling ...");
   calibration();  // Запуск функции горизонтирования
+  SetDiodColor(XXX);
+  LCD.clear();
+  LCD.setCursor(0, 0);
+  LCD.print("Leveling done!");
+  
+  
+  // Ожидание определения наклона объекта и корректировка целевого угла
+  boolean isNotDirect=true;
+  while(isNotDirect)
+  {
+    if((EncoderValue2 < -50))
+    {
+      angle_bias = tmpBias + DEFAULT_BIAS - 3894; // поправка при правой калибровке
+      isNotDirect=false;    
+    }
+    if((EncoderValue2 > 50))
+    {  
+      angle_bias = tmpBias + DEFAULT_BIAS + 25; // поправка при левой калибровке
+      isNotDirect=false;
+    }
+  }
   oldTimeStabilisation = millis();
   
-  // Запуск последовательного порта для настройки вертикального состояния
+  // выключение отсветки диодов
   
+  State = FALLED;
+   
 }
 
 void loop() {
@@ -222,67 +281,59 @@ void loop() {
   }while(periodStabilisation < controlPeriod);
   oldTimeStabilisation = millis();
   
+  
+  
   switch(State){
     case READY: // Ожидание
-        analogWrite(MOTOR_A, LOW);
-        analogWrite(MOTOR_B, LOW);
-        Serial.println(angle_bias);
-        if(fixFlag == 0)  // Определение целевого угла, если не определен
+        
+        SetDiodColor(RXX);
+                               
+        SetDisplayMessage(OPTIONS);
+               
+        // работа системы линенйного приведения
+        linear_err_limit=100;
+        linear_err=EncoderValue1-linear_bias;
+        if (linear_err>linear_err_limit)
         {
-          if((EncoderValue2 < -50))
+          analogWrite(MOTOR_A, 100);
+          analogWrite(MOTOR_B, LOW);
+        }
+        if (linear_err<-linear_err_limit)
+        {
+          analogWrite(MOTOR_A, LOW);
+          analogWrite(MOTOR_B, 100);
+        }
+        if (linear_err<linear_err_limit && linear_err>-linear_err_limit)
+        {
+          analogWrite(MOTOR_A, LOW);
+          analogWrite(MOTOR_B, LOW);
+        }
+                      
+        // работа системы вертикализации
+        if (linear_err<linear_err_limit && linear_err>-linear_err_limit)
+        {
+          Ang=Ang+dAng;
+          if (dAng>0)
           {
-            angle_bias = angle_bias - 3897;
-            fixFlag = 1;
+            servo_left.write(Ang);
           }
-          if((EncoderValue2 > 50))
-            fixFlag = 1;
-        }
-        if(((prevEncoderValue1 >= EncoderValue1 + 10) || (prevEncoderValue1 <= EncoderValue1 - 10)) || ((prevEncoderValue2 >= EncoderValue2 + 10) || (prevEncoderValue2 <= EncoderValue2 - 10)))
-        { // Параметры углового или линейного положения были изменены
-          prevEncoderValue2 = EncoderValue2;
-          prevEncoderValue1 = EncoderValue1;
-          oldMenuTime = millis();
-        }
-
-        if(millis() - oldMenuTime < 3000)
-        { // Вывод параметров углового или линейного положения
-          LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
-          LCD.print("Pos: "); // печатаем сообщение на первой строке
-          LCD.print((2 * R * 3.1415 * (EncoderValue1 - linear_bias) / 1320)); // печатаем сообщение на первой строке
-          LCD.print(" cm    "); // печатаем сообщение на первой строке
-          LCD.setCursor(0, 1); // ставим курсор на 1 символ первой строки
-          LCD.print("Ang: "); // печатаем сообщение на первой строке
-        }
-        else
-        { // Вывод меню
-          LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
-          if(chooseAlgorithm == 0)
-            LCD.print("Algorithm 1  (1)"); // печатаем сообщение на первой строке
-          else
-            LCD.print("Algorithm 2  (1)"); // печатаем сообщение на первой строке
-          LCD.setCursor(0, 1); // ставим курсор на 1 символ первой строки
-          if(SendOPC == 1)
-            LCD.print("SCADA on     (2)"); // печатаем сообщение на первой строке
-          else
-            LCD.print("SCADA off    (2)"); // печатаем сообщение на первой строке
-        }        
-        if(fixFlag == 0)
-        { // Целевой угол не определен
-          LCD.print("---"); // печатаем сообщение на первой строке
-        }
-        else
-        {
-          LCD.print((double)degrees(2 * 3.1415 * (EncoderValue2 - angle_bias) / 8000)); // печатаем сообщение на первой строке
-          LCD.write(223); 
-          LCD.print("     "); // печатаем сообщение на первой строке
-        }
-        if((EncoderValue2 >= angle_bias - 22) && (EncoderValue2 <= angle_bias + 22))
-//        if((EncoderValue2 >= angle_bias - 22) && (EncoderValue2 <= angle_bias + 22) && (EncoderValue1 >= linear_bias - 22) && (EncoderValue1 <= linear_bias + 22))
+          if (dAng<0)
+          {
+            servo_right.write(Ang);
+          } 
+        }       
+        
+        // проверка факта вертикализации и переход в режим стабилизации
+        if((EncoderValue2 >= angle_bias - 15) && (EncoderValue2 <= angle_bias + 15))
         { // Переход в состояние стабилизации
           State = STABILISATION;
+                    
+          servo_left.write(servo_init_left);
+          servo_right.write(servo_init_right);
+          
           LCD.clear();
-          LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
-          LCD.print("  CSU on"); // печатаем сообщение на первой строке
+          LCD.setCursor(3, 0); // ставим курсор на 1 символ первой строки
+          LCD.print("CSU is on"); // печатаем сообщение на первой строке
           oldTimeStabilisation = millis(); 
           startTime = oldTimeStabilisation;
           // Обнуление внутренних переменных регуляторов
@@ -293,11 +344,47 @@ void loop() {
           maxAngle = 0;
         }
       break;
+    
     case STABILISATION:
+      SetDiodColor(XXG);
       stabilisation();  // Выработка управляющего воздействия
       break;
+   
     case FALLED:
+      SetDiodColor(XXX);
+      // выбор сервопривода вертикализации
+      if(EncoderValue2 > angle_bias)
+        {
+          Ang=servo_init_right;
+          dAng=-1;
+     
+        }
+      if(EncoderValue2 < angle_bias)
+        {
+          Ang=servo_init_left;
+          dAng=1;
+        }
+      // выключение моторов
+      analogWrite(MOTOR_A, LOW);
+      analogWrite(MOTOR_B, LOW);
+            
+      // печать текущих параметров объекта 
+      if(((prevEncoderValue1 >= EncoderValue1 + 10) || (prevEncoderValue1 <= EncoderValue1 - 10)) || ((prevEncoderValue2 >= EncoderValue2 + 10) || (prevEncoderValue2 <= EncoderValue2 - 10)))
+        { // Параметры углового или линейного положения были изменены
+          prevEncoderValue2 = EncoderValue2;
+          prevEncoderValue1 = EncoderValue1;
+          oldMenuTime = millis();
+        }
+
+        if(millis() - oldMenuTime < 3000)
+          // Вывод параметров углового или линейного положения
+          SetDisplayMessage(OPTIONS);  
+        else
+         // Вывод меню
+          SetDisplayMessage(MENU);
       break;
+      
+      
   }
   char key = pad.getKey();  // Проверка нажатия кнопки
   if(SendOPC == 1)
@@ -337,16 +424,14 @@ inline __attribute__((always_inline)) void handlerKey(char key){
     case READY:
       switch(key){
           case '1': // Переключение алгоритма
-            if(chooseAlgorithm == 0)
-              chooseAlgorithm = 1;
-            else
-              chooseAlgorithm = 0;
             break;
           case '2': // Вкл/Выкл обмен данными с ОРС сервером
-            if(SendOPC == 1)
-              SendOPC = 0;
-            else
-              SendOPC = 1;
+            break;
+          case '4': // Выключение СУД
+            //while(EncoderValue2 > (angle_bias - criticalAngle) && EncoderValue2 < (angle_bias + criticalAngle));
+            servo_left.write(servo_init_left);
+            servo_right.write(servo_init_right);
+            State = FALLED;
             break;
       }
       break;
@@ -357,14 +442,26 @@ inline __attribute__((always_inline)) void handlerKey(char key){
             maxAngle = 0;
             break;
           case '4': // Выключение СУД
-            while(EncoderValue2 > (angle_bias - criticalAngle) && EncoderValue2 < (angle_bias + criticalAngle));
-            State = READY;
+            //while(EncoderValue2 > (angle_bias - criticalAngle) && EncoderValue2 < (angle_bias + criticalAngle));
+            State = FALLED;
             break;
       }
       break;
     case FALLED:
       switch(key){
-          case '4': // Выход из режима аварии
+        case '1': // Переключение алгоритма
+            if(chooseAlgorithm == 0)
+              chooseAlgorithm = 1;
+            else
+              chooseAlgorithm = 0;
+            break;
+        case '2': // Вкл/Выкл обмен данными с ОРС сервером
+            if(SendOPC == 1)
+              SendOPC = 0;
+            else
+              SendOPC = 1;
+            break;  
+        case '4': // Выход из режима аварии
             State = READY;
             break;
       }
@@ -379,7 +476,7 @@ inline __attribute__((always_inline)) void handlerKey(char key){
 inline __attribute__((always_inline)) void calibration(){
   int16_t ax, ay, az, gx, gy, gz;
   double tmpAngle = 0;
-  double tmpBias = 0;
+  
   LCD.setCursor(0, 1); // ставим курсор на 1 символ второй строки
   for(int i = 0; i < COUNT; i++)
   {
@@ -390,10 +487,9 @@ inline __attribute__((always_inline)) void calibration(){
   }  
   // Введение поправки в целевой угол
   tmpBias = (((3.1415/2) - acos((tmpAngle - horizontErr)/G))*8000)/(2*3.1415);
-  angle_bias = EncoderValue2 + DEFAULT_BIAS - tmpBias;
+  //angle_bias = EncoderValue2 + DEFAULT_BIAS - tmpBias;
   linear_bias = EncoderValue1;
-  LCD.clear();
-  State = READY;
+  
 }
 
 inline __attribute__((always_inline)) void stabilisation(){
@@ -433,38 +529,12 @@ inline __attribute__((always_inline)) void stabilisation(){
         maxAngle = abs(EncoderValue2 - angle_bias);
       if(abs(EncoderValue1 - linear_bias) > maxLinear)
         maxLinear = abs(EncoderValue1 - linear_bias);
-      if(flagPrint == 0)
-      { // Если ранее текст не выводился, то вывод полного текста
-        LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
-        LCD.print((2 * R * 3.1415 * (EncoderValue1 - linear_bias) / 1320)); // печатаем сообщение на первой строке
-        LCD.setCursor(5, 0); // ставим курсор на 1 символ первой строки
-        LCD.print(" cm max  "); // печатаем сообщение на первой строке
-        LCD.setCursor(0, 1); // ставим курсор на 1 символ первой строки
-        LCD.print((double)degrees(2 * 3.1415 * (EncoderValue2 - angle_bias) / 8000)); // печатаем сообщение на первой строке
-        LCD.write(223); 
-        LCD.setCursor(5, 1); // ставим курсор на 1 символ первой строки
-        LCD.print("max  "); // печатаем сообщение на первой строке
-        LCD.print("  "); // печатаем сообщение на первой строке
-        flagPrint = 1;
-      }
-      else
+      if(maxLinear != prevMaxLinear || maxAngle != prevMaxAngle)
       {
-        if(maxLinear != prevMaxLinear)
-        { // Если был изменен, то вывод нового на дисплей
-          LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
-          LCD.print((2 * R * 3.1415 * (maxLinear) / 1320)); // печатаем сообщение на первой строке
-          LCD.print(" cm "); // печатаем сообщение на первой строке
-          prevMaxLinear = maxLinear;
-        }
-        if(maxAngle != prevMaxAngle)
-        { // Если был изменен, то вывод нового на дисплей
-          LCD.setCursor(0, 1); // ставим курсор на 1 символ первой строки
-          LCD.print((double)degrees(2 * 3.1415 * (maxAngle) / 8000)); // печатаем сообщение на первой строке
-          LCD.write(223); 
-          LCD.setCursor(5, 1); // ставим курсор на 1 символ первой строки
-          LCD.print(" max "); // печатаем сообщение на первой строке
-          prevMaxAngle = maxAngle;
-        }
+        //SetDisplayMessage(MAXVALUES);
+        //LCD монитор тормозит цикл управления             
+        prevMaxLinear = maxLinear;
+        prevMaxAngle = maxAngle;
       }
     }
   }
@@ -646,6 +716,84 @@ void UpdateEncoder2()
 // AngleValue2 = (double)2 * 3.1415 * EncoderValue2 / 8000; //пересчет показаний в радианы
 } 
 
+// отображение на дисплее параметров объекта
+void SetDisplayMessage(int message)
+{
+  switch (message)
+  {
+    case OPTIONS:
+      LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
+      LCD.print("Pos: "); // печатаем сообщение на первой строке
+      LCD.print((2 * R * 3.1415 * (EncoderValue1 - linear_bias) / 1320)); // печатаем сообщение на первой строке
+      LCD.print(" cm    "); // печатаем сообщение на первой строке
+      LCD.setCursor(0, 1); // ставим курсор на 1 символ первой строки
+      LCD.print("Ang: "); // печатаем сообщение на первой строке
+      LCD.print((double)degrees(2 * 3.1415 * (EncoderValue2 - angle_bias) / 8000)); // печатаем сообщение на первой строке
+      LCD.write(223); 
+      LCD.print("     "); // печатаем сообщение на первой строке
+      break;
+    case MENU:
+      LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
+      if(chooseAlgorithm == 0)
+        LCD.print("Algorithm 1  (1)"); // печатаем сообщение на первой строке
+      else
+        LCD.print("Algorithm 2  (1)"); // печатаем сообщение на первой строке
+      LCD.setCursor(0, 1); // ставим курсор на 1 символ первой строки
+      if(SendOPC == 1)
+        LCD.print("Mode: remote (2)"); // печатаем сообщение на первой строке
+      else
+        LCD.print("Mode: local  (2)"); // печатаем сообщение на первой строке
+      break;
+    case MAXVALUES:
+       LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
+       LCD.print("L");
+       LCD.print("|Max(cm):");
+       LCD.print((2 * R * 3.1415 * (maxLinear) / 1320)); // печатаем сообщение на первой строке
+       LCD.print("  ");
+       LCD.setCursor(0, 1); // ставим курсор на 1 символ первой строки
+       LCD.print("M");
+       LCD.print("|Max( ");
+       LCD.write(223);
+       LCD.print("):");
+       LCD.print((double)degrees(2 * 3.1415 * (maxAngle) / 8000)); // печатаем сообщение на первой строке
+       LCD.print("  "); // печатаем сообщение на первой строке
+       break;
+  }
+}
+
+
+// Установка заданной комбинации отсветки светодиодов
+void SetDiodColor(int diode)
+{
+  switch (diode)
+  {
+    case RYG: // горят красный, желтый, зеленый
+      digitalWrite(43, HIGH);
+      digitalWrite(47, HIGH);
+      digitalWrite(45, HIGH);
+      break;
+    case RXX: // горит красный
+      digitalWrite(43, HIGH);
+      digitalWrite(47, LOW);
+      digitalWrite(45, LOW);
+    break;
+    case XYX: // горит желтый
+      digitalWrite(43, LOW);
+      digitalWrite(47, HIGH);
+      digitalWrite(45, LOW);
+    break;
+    case XXG: // горит зеленый
+      digitalWrite(43, LOW);
+      digitalWrite(47, LOW);
+      digitalWrite(45, HIGH);
+    break;
+    case XXX: // ничего не горит
+      digitalWrite(43, LOW);
+      digitalWrite(47, LOW);
+      digitalWrite(45, LOW);
+    break;
+  }
+}
 
 // Перезагрузка МК
 void softReset() {
