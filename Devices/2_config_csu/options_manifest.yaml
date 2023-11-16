@@ -2,73 +2,83 @@ time_options:
   name: Временные параметры
   values:
     duration_time:
-      ws_name: длительность эксперимента
+      ws_name: длительность эксперимента для местного и для slave
       ws_dimension: сек
       ws_type: integer
       ws_regexp: ^([1-9]|10)$
       ws_value: целое число 1 от до 10
       ws_control: field
+      mb_reg_name: holding
+      mb_reg_address: 8
+      mb_reg_type: uint16_t
+      mb_decimals: 0
     start_time:
-      ws_name: время начала модельное
+      ws_name: время начала модельное для местного
       ws_dimension: сек
       ws_type: integer
       ws_regexp: ^([1-9]|10)$
       ws_value: текущее
       ws_control: readonly
+      mb_reg_name: null
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: 0
     delta_time:
-      ws_name: время дискретизации
+      ws_name: время дискретизации для местного
       ws_dimension: сек
       ws_type: float
       ws_regexp: null
       ws_value: 0.1
       ws_control: readonly
+      mb_reg_name: null
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: 0
     scale_time:
-      ws_name: масштаб времени
+      ws_name: масштаб времени для местного
       ws_dimension: б/р
       ws_type: float
       ws_regexp: null
       ws_value: 1
       ws_control: readonly
+      mb_reg_name: null
+      mb_reg_address: null
+      mb_reg_type: null
+      mb_decimals: 0
 initial_state:
   name: Начальное состояние
   values:
-    mute_state:
-      ws_name: звуковая сигнализация
-      ws_dimension: состояние
+    delta_angle_bias:
+      ws_name: начальный угол
+      ws_dimension: град.
       ws_type: integer
-      ws_regexp: ^(выкл|вкл)$
-      ws_value: выкл или вкл
-      ws_control: switch
-      mb_dictionary:
-        вкл: 0
-        выкл: 1
+      ws_regexp: ^([1-3])$
+      ws_value: целое число 1 от до 3
+      ws_control: field
       mb_reg_name: holding
-      mb_reg_address: 17
-      mb_reg_type: bit
+      mb_reg_address: 9
+      mb_reg_type: uint16_t
       mb_decimals: 0
 model_parameters:
   name: Параметры модели
   values:
-    temperature_unit:
-      ws_name: размерность температуры
-      ws_dimension: код
-      ws_type: srting
-      ws_regexp: ^[F,C]$
-      ws_value: F или C
-      mb_dictionary:
-        C: 0
-        F: 1
-      ws_control: switch
+    index_pid:
+      ws_name: номер алгоритма
+      ws_dimension: номер
+      ws_type: integer
+      ws_regexp: ^([1-4])$
+      ws_value: целое число 1 от до 4
+      ws_control: field
       mb_reg_name: holding
-      mb_reg_address: 17
+      mb_reg_address: 10
       mb_reg_type: bit
-      mb_decimals: 1
+      mb_decimals: uint16_t
 influences:
   name: Параметры внешней среды
   values:
-    air_flow:
-      ws_name: величина потока воздуха
-      ws_dimension: куб.м в сек.
+    surface slope:
+      ws_name: наклон поверхности
+      ws_dimension: град.
       ws_type: string
       ws_regexp: null
       ws_value: 0

@@ -422,10 +422,18 @@ class Device:
 		'''
 		Передать на установку (в modbus holding регистры) параметры эксперимента
 		'''
-		parameter_category=['initial_state', 'model_parameters']
+		# Проверка режима управления экспериментальным оборудованием (local/remote)
+		is_local_mode=1
+		service_options=self.experiment_manifest['service_options']
+		options_values=service_options['values']
+		is_local_mode=options_values['is_local_mode']
+		is_local_mode_name=is_local_mode['mb_reg_name']
+		is_local_mode_address=is_local_mode['mb_reg_address']
+		# TO DO : считать значение регистра и сравнить его с нулем
 		
+		parameter_category=['time_options','initial_state', 'model_parameters']
 		# Формирование значений параметров эксперимента для битовых modbus регистров
-		bit_reg_values={} # словарь pначений регистров {"номер регистра":"значение",...}
+		bit_reg_values={} # словарь значений регистров {"номер регистра":"значение",...}
 		bit_reg_mask={} # маска битовых регистров
 		for name in parameter_category:
 			category=self.options_data[name]
@@ -461,7 +469,7 @@ class Device:
 				return 1
 						
 		# Формирование значений параметров эксперимента для числовых modbus регистров
-		reg_values={} # словарь pначений регистров {"номер регистра":"значение",...}
+		reg_values={} # словарь значений регистров {"номер регистра":"значение",...}
 		reg_decimals={} # количество знаков после запятой
 		for name in parameter_category:
 			category=self.options_data[name]
@@ -485,6 +493,10 @@ class Device:
 				self.offline_message=f'UNABLE to write options data to modbus value-register {key}'
 				print(f'\t [CRASH!] {self.offline_message}')
 				return 1
+		
+		# Запись в slave признака полученной заявки
+		# TO DO
+		
 		
 		print(f'\t [ОК!] Options data down to device')
 		return 0

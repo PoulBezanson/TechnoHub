@@ -34,76 +34,56 @@ dataset_options:
       mb_reg_address: null
       mb_reg_type: null
       mb_decimals: 6
-    co2:
-      ws_name: концентрация CO2
-      ws_value: co2
-      ws_dimension: ppm
+    angle:
+      ws_name: угол
+      ws_value: angle
+      ws_dimension: град.
       ws_regexp: .*
       ws_control: readonly
-      mb_reg_name: input
+      mb_reg_name: holding
       mb_reg_address: 0
       mb_reg_type: uint16_t
       mb_decimals: 0
-    tvoc:
-      ws_name: концентрация TVOC
-      ws_value: tvoc
-      ws_dimension: мг/м^3
+    angle_speed:
+      ws_name: угловая скорость
+      ws_value: angle_speed
+      ws_dimension: град./сек
       ws_regexp: .*
       ws_control: readonly
-      mb_reg_name: input
+      mb_reg_name: holding
       mb_reg_address: 1
       mb_reg_type: uint16_t
-      mb_decimals: 2
-    pm1_0:
-      ws_name: концентрация PM1.0
-      ws_value: pm1_0
-      ws_dimension: мкг/м^3
+      mb_decimals: 0
+    position:
+      ws_name: линейное положение
+      ws_value: position
+      ws_dimension: см.
       ws_regexp: .*
       ws_control: readonly
-      mb_reg_name: input
+      mb_reg_name: holding
       mb_reg_address: 2
       mb_reg_type: uint16_t
       mb_decimals: 0
-    pm2_5:
-      ws_name: концентрация PM2.5
-      ws_value: pm2_5
-      ws_dimension: мкг/м^3
+    position_speed:
+      ws_name: линейная скорость
+      ws_value: position_speed
+      ws_dimension: см./cек
       ws_regexp: .*
       ws_control: readonly
-      mb_reg_name: input
+      mb_reg_name: holding
       mb_reg_address: 3
       mb_reg_type: uint16_t
       mb_decimals: 0
-    pm10:
-      ws_name: концентрация PM10
-      ws_value: pm10
-      ws_dimension: мкг/м^3
+    control_value:
+      ws_name: управляющее значение
+      ws_value: control_value
+      ws_dimension: ньютон на метр
       ws_regexp: .*
       ws_control: readonly
-      mb_reg_name: input
+      mb_reg_name: holding
       mb_reg_address: 4
       mb_reg_type: uint16_t
       mb_decimals: 0
-    temperature:
-      ws_name: температура
-      ws_value: temperature
-      ws_dimension: гр
-      ws_regexp: .*
-      ws_control: readonly
-      mb_reg_name: input
-      mb_reg_address: 5
-      mb_reg_type: int16_t
-      mb_decimals: 1
-    humidity:
-      ws_name: относительная влажность
-      ws_value: humidity
-      ws_dimension: процент
-      ws_regexp: .*
-      ws_control: readonly
-      mb_reg_name: input
-      mb_reg_address: 6
-      mb_reg_type: uint16_t
-      mb_decimals: 1
 video_options:
   name: Параметры выходного видеофайла
   values:

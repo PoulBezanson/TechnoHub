@@ -1,12 +1,12 @@
-name: Монитор качества воздуха в помещении
+name: Стабилизация ракеты
 experiment_type: Физический
-description: Эксперимент позволяет регистрировать параметры воздуха в учебном помещении
+description: Эксперимент моделирует работу системы управления движением ракеты
 tags:
-- пуки
-- качество воздуха
-- углекислый газ
-- датчик
-owner: OOO "Рога и копыта"
+- стабилизация
+- ракета
+- ПИД
+- регулятор
+owner: OOO "TechnoHub"
 address: Санкт-Петербург, ул.Большая Морская, д.67
 contacts: tel +7 (921) 588-57-37, email bznpavel@yandex.ru
 service_options:
@@ -22,13 +22,28 @@ service_options:
       dimension: сек.
       type: float
       value: 69
-    initional_flag:
-      name: признак начальной инициализации установки
+    is_local_mode:
+      name: признак местного управления от slave
       mb_reg_name: holding
-      mb_reg_address: 16
+      mb_reg_address: 5
       mb_reg_type: uint16_t
       mb_decimals: 0
-      mb_value: 2
+      mb_value: 0
+    is_claim_received:
+      name: признак выставления признака записи заявки в slave
+      mb_reg_name: holding
+      mb_reg_address: 6
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+      mb_value: 1
+    initional_flag:
+      name: признак начальной инициализации установки от slave
+      mb_reg_name: holding
+      mb_reg_address: 7
+      mb_reg_type: uint16_t
+      mb_decimals: 0
+      mb_value: 1
+    
 full_description: Особенности задачи остабилизации перевернутого маятника   можно
   посмотреть по ссылке [Текст ссылки](https://www.example.com). You can even add equation
   numbers (unfortunately there is no automatic numbering and refs support) $$|\vec{A}|=\sqrt{A_x^2

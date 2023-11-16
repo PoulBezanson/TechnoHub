@@ -16,6 +16,8 @@ unsigned long oldTimeStabilisation = 0; // Время начала предыд�
 unsigned long periodStabilisation = 0;  // Действительное значение цикла управления
 unsigned long oldMenuTime = 0;  // Время нахождения макета неподвижно
 unsigned long start_time = 0;  // Время запуска СУД
+unsigned long duration_time = 0; // 
+#define DEFAULT_DURATION_TIME 20; // длительность эксперимента (секунды)
 long control_value = 0; // значение управляющего воздействия для алгоритма 1
 long linearStabAngle = 0; // значение управляющего воздействия для алгоритма 2
 int index_pid = 1; // Код выбранного набора ПИД коэффициентов (0 - внешний набор из контроллера эксперимента)/ Максимум - N_PIDS
@@ -37,8 +39,8 @@ double values_pids[N_PIDS][6]={{0, 0, 0, 0, 0, 0},
 #define PIN_SERVO_RIGHT 51
 Servo servo_left;// создадим объект сервопривода
 Servo servo_right;
-int servo_init_left=0; // начальная позиция
-int servo_init_right=180; // начальная позиция
+int servo_init_left=1; // начальная позиция
+int servo_init_right=179; // начальная позиция
 int Ang; // значение текущего угла сервопривода
 int dAng=0; // значение приращения угла вертикализации (+1 или -1)
 //
@@ -66,8 +68,6 @@ SimpleKeypad pad((char*)keys, rowPins, colPins, KP_ROWS, KP_COLS);  // Объе�
 #define HOLDING_REGS_SIZE 20 // Количество каналов для OPC сервера
 #define ID   1      // Адрес МК для обмена данными с ОРС сервером
 Modbus slave(ID, 0, 0);  // Объект для работы с ОРС сервером
-int8_t state = 0; // Системная переменная состояния для работы с ОРС сервером
-int SendOPC = 0;  // Признак режима с подключением к ОРС серверу
 uint16_t holdingRegs[HOLDING_REGS_SIZE]; // Массив тегов
 // указатели на регистры
 uint16_t *p_angle=holdingRegs;
@@ -77,9 +77,11 @@ uint16_t *p_position_speed=holdingRegs+3;
 uint16_t *p_control_value=holdingRegs+4;  
 uint16_t *p_is_local_mode=holdingRegs+5; 
 uint16_t *p_is_claim_received=holdingRegs+6;
-uint16_t *p_initial_flag=holdingRegs+7;
-uint16_t *p_index_pid=holdingRegs+8;
-uint16_t *p_duration_time=holdingRegs+9;
+uint16_t *p_initional_flag=holdingRegs+7;
+uint16_t *p_duration_time=holdingRegs+8;
+uint16_t *p_delta_angle_bias=holdingRegs+9;
+uint16_t *p_index_pid=holdingRegs+10;
+
 
 //
 // инициализация датчика линейного положения объекта
@@ -104,6 +106,8 @@ volatile double AngleValue2 = 0; // значение показания энко
 int criticalAngle = 150;  // Критическое угловое отклонение по умолчанию соответствует 6.75 гр.
 #define DEFAULT_BIAS 1949 // Целевое значение углового положения относительно платформы
 int angle_bias = DEFAULT_BIAS;  // Целевое угловое положение
+#define DEFAULT_DELTA_ANGLE  0.675 // Отклонение от целевого углового положения при вертикализации (град.)
+int delta_angle_bias=(int) (DEFAULT_DELTA_ANGLE*22.22); //Преобразование угла в количество импульсов
 //
 // Инициализация LCD дисплея
 LCD_1602_RUS LCD(0x27, 16, 2);  // Объект для вывода информации на дисплей
@@ -200,13 +204,13 @@ void setup() {
   
   // Инициализация массива регистров
   *p_is_local_mode = 1; 
-  *p_is_claim_received=1;
-  *p_initial_flag=0;
-  *p_index_pid=3;
-  *p_duration_time=5;
+  *p_is_claim_received=0;
+  *p_initional_flag=0;
+  *p_index_pid=0;
+  *p_duration_time=0;
   
   slave.begin(9600);
-  //slave.poll( holdingRegs, HOLDING_REGS_SIZE);  
+  slave.poll( holdingRegs, HOLDING_REGS_SIZE);  
   
   // Настройка портов для работы энкодеров
   pinMode(EncoderPinMSB1, INPUT); //датчик угла 1
@@ -261,12 +265,8 @@ void setup() {
    
 }
 
-void loop() {
-  //  Обработка нажатия кнопки
-  char key = pad.getKey();  // Проверка нажатия кнопки
-  if(key) { 
-    handlerKey(key);
-  }
+void loop() 
+{
   do{ // Пока время, прошедшее с начала цикла меньше, чем период цикла управления
     periodStabilisation = millis()-oldTimeStabilisation;
     
@@ -315,7 +315,7 @@ void loop() {
         }       
         
         // проверка факта вертикализации и переход в режим стабилизации
-        if((EncoderValue2 >= angle_bias - 15) && (EncoderValue2 <= angle_bias + 15))
+        if((EncoderValue2 >= angle_bias - delta_angle_bias) && (EncoderValue2 <= angle_bias + delta_angle_bias))
         { // Переход в состояние стабилизации
           State = STABILISATION;
                     
@@ -325,7 +325,10 @@ void loop() {
           SetDisplayMessage(MENU);
                   
           start_time = millis();
-          
+          duration_time*=1000; // перевод длительности эксперимента в миллисекунды
+          SetDiodColor(XXG);
+          *p_initional_flag=true;
+                            
           // Обнуление внутренних переменных регуляторов
           computePIDlinear(linear_bias, linear_bias, kPlinear, kIlinear, kDlinear, periodStabilisation, true);
           computePIDangle(angle_bias, angle_bias, kPangle, kIangle, kDangle, periodStabilisation, true); 
@@ -333,17 +336,16 @@ void loop() {
           maxLinear = 0;
           maxAngle = 0;
         }
+      
       break;
     
     case STABILISATION:
       // TO DO
-      
-      SetDiodColor(XXG);
       stabilisation();  // Выработка управляющего воздействия
+      *p_initional_flag=false;
       break;
    
     case FALLED:
-      SetDiodColor(XXX);
       // выбор сервопривода вертикализации
       if(EncoderValue2 > angle_bias)
         {
@@ -368,7 +370,7 @@ void loop() {
           oldMenuTime = millis();
         }
 
-      if(millis() - oldMenuTime < 3000)
+      if(millis() - oldMenuTime < 1000)
           // Вывод параметров углового или линейного положения
           SetDisplayMessage(OPTIONS);  
       else
@@ -376,28 +378,33 @@ void loop() {
         SetDisplayMessage(MENU);
         
       if (is_local_mode==false)
-        {
-         slave.poll(holdingRegs, HOLDING_REGS_SIZE);
+      {
          if (*p_is_claim_received==true)
-          {
+         {
+            duration_time=*p_duration_time;
+            delta_angle_bias=int(*p_delta_angle_bias*22.22);
             index_pid=*p_index_pid;
             SetStateReady();
-            *p_is_claim_received=false;
-            
-          }
-          
+         }
       }
-        
-        
-        
-        
-        
-        break;
+   break;
   }
+  //  Обработка нажатия кнопки
+  char key = pad.getKey();  // Проверка нажатия кнопки
+  if(key)  
+    handlerKey(key);
+  //
+  // обмен данными по modbus 
+  *p_angle=1;
+  *p_angle_speed=2;
+  *p_position=3;
+  *p_position_speed=4;
+  *p_control_value=5;  
+  slave.poll( holdingRegs, HOLDING_REGS_SIZE);
 }
 
-
 inline __attribute__((always_inline)) void handlerKey(char key){
+// Функция обработки нажатия клавиши клавиатуры
   switch(State){
     case READY:
       switch(key){
@@ -433,15 +440,23 @@ inline __attribute__((always_inline)) void handlerKey(char key){
     case FALLED:
       switch(key){
         case '2': // Переключение набора коэффициентов ПИД регулятора
-            index_pid+=1;
-            index_pid%=N_PIDS;
+            if (is_local_mode)
+            {
+              index_pid+=1;
+              index_pid%=N_PIDS;
+            }
             break;
         case '3': // изменение режима управления: local/remote
             if (is_local_mode) is_local_mode=false;
             else is_local_mode=true;
             break;  
         case '4': // Переход в режим подготовки к стабилизации
-            SetStateReady();
+            if (is_local_mode)
+            {
+              duration_time=DEFAULT_DURATION_TIME;
+              delta_angle_bias=(int) (DEFAULT_DELTA_ANGLE*22.22);
+              SetStateReady();
+            }
             break;
       }
       break;
@@ -474,7 +489,8 @@ inline __attribute__((always_inline)) void calibration(){
 inline __attribute__((always_inline)) void stabilisation()
 {
   if((EncoderValue2 > (angle_bias - criticalAngle) && EncoderValue2 < (angle_bias + criticalAngle)) && 
-    (EncoderValue1 > (linear_bias - criticalLinear) && EncoderValue1 < (linear_bias + criticalLinear)))
+    (EncoderValue1 > (linear_bias - criticalLinear) && EncoderValue1 < (linear_bias + criticalLinear)) &&
+    millis()-start_time <= duration_time)
   {
     
       // Расчет управляющего воздействия по алгоритму
@@ -521,112 +537,15 @@ inline __attribute__((always_inline)) void stabilisation()
   { // Переход в состояние аварии
     analogWrite(MOTOR_A, LOW);
     analogWrite(MOTOR_B, LOW);
-    if(millis() - start_time > 200)
-    { // Если прошло более 0.2с после включения СУД
-      LCD.clear();
-      LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
-      LCD.print("Crash"); // печатаем сообщение на первой строке
-      LCD.setCursor(0, 1); // ставим курсор на 1 символ первой строки
-      //  Вывод на дисплей причины аварии
-      if(!(EncoderValue1 > (linear_bias - criticalLinear) && EncoderValue1 < (linear_bias + criticalLinear)))
-      {
-        LCD.print("Pos* "); // печатаем сообщение на первой строке
-        LCD.print((2 * R * 3.1415 * (EncoderValue1 - linear_bias) / 1320)); 
-        LCD.print(" cm"); // печатаем сообщение на первой строке
-      }
-      else
-      {
-        LCD.print("Ang* "); // печатаем сообщение на первой строке
-        LCD.print((double)degrees(2 * 3.1415 * (EncoderValue2 - angle_bias) / 8000));    
-        LCD.write(223);    
-      }
-      State = FALLED;
-    }
-    else
-    {
-      State = READY;
-    }
+    *p_is_claim_received=false; // информирование о сбросе заявки
+    State = FALLED;
+    SetDiodColor(XXX);
   }
-  
- }
-
-
-inline __attribute__((always_inline)) void send_OPC(){
-  // Подготовка данных к отправке на ОРС сервер
-  holdingRegs[0] = EncoderValue2;
-  holdingRegs[1] = angle_bias;
-  holdingRegs[2] = EncoderValue1;
-  holdingRegs[3] = linear_bias;
-  holdingRegs[4] = index_pid;
-  if(index_pid == 0)
-  {
-    holdingRegs[5] = (int)(kPangle*1000);
-    holdingRegs[6] = (int)(kIangle*1000);
-    holdingRegs[7] = (int)(kDangle*1000);
-    holdingRegs[8] = (int)(kPlinear*1000);
-    holdingRegs[9] = (int)(kIlinear*1000);
-    holdingRegs[10] = (int)(kDlinear*1000);
-  }
-  else
-  {
-    holdingRegs[5] = (int)(kPangle2*1000);
-    holdingRegs[6] = (int)(kIangle2*1000);
-    holdingRegs[7] = (int)(kDangle2*1000);
-    holdingRegs[8] = (int)(kPlinear2*1000);
-    holdingRegs[9] = (int)(kIlinear2*1000);
-    holdingRegs[10] = (int)(kDlinear2*1000);
-  }
-  holdingRegs[11] = 0;
-  holdingRegs[12] = 0;
-  holdingRegs[13] = 0;
-  holdingRegs[14] = 0;
-  holdingRegs[15] = State;
-  holdingRegs[16] = criticalAngle;
-  holdingRegs[17] = criticalLinear;
-  holdingRegs[18] = controlPeriod;
-  holdingRegs[19] = periodStabilisation;
-  holdingRegs[20] = maxAngle;
-  holdingRegs[21] = maxLinear;
-  holdingRegs[22] = 0;
-
-  slave.poll(holdingRegs, HOLDING_REGS_SIZE);
-
-  // Обработка полученных данных от ОРС сервера
-  if(holdingRegs[22] == 1)
-  {
-    holdingRegs[22] = 0;
-    slave.poll( holdingRegs, HOLDING_REGS_SIZE);
-    delay(1000);
-    softReset();
-  }
-  linear_bias = holdingRegs[3];
-  if(index_pid == 0)
-  {
-    kPangle = ((double)holdingRegs[5]/1000);
-    kIangle = ((double)holdingRegs[6]/1000);
-    kDangle = ((double)holdingRegs[7]/1000);
-    kPlinear = ((double)holdingRegs[8]/1000);
-    kIlinear = ((double)holdingRegs[9]/1000);
-    kDlinear = ((double)holdingRegs[10]/1000);
-  }
-  else
-  {
-    kPangle2 = ((double)holdingRegs[5]/1000);
-    kIangle2 = ((double)holdingRegs[6]/1000);
-    kDangle2 = ((double)holdingRegs[7]/1000);
-    kPlinear2 = ((double)holdingRegs[8]/1000);
-    kIlinear2 = ((double)holdingRegs[9]/1000);
-    kDlinear2 = ((double)holdingRegs[10]/1000);
-  }
-  index_pid = holdingRegs[4];
-  criticalAngle = holdingRegs[16];
-  criticalLinear = holdingRegs[17];
-  controlPeriod = holdingRegs[18];
 }
 
-
+long computePIDangle(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID)
 // Функция, реализующая подчиненный регулятор
-long computePIDangle(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID) {
+{
   static long integralAngle = 0, prevErrAngle = 0;
   if(restartPID == true)
   {
@@ -642,7 +561,9 @@ long computePIDangle(int input, int setpoint, double kp, double ki, double kd, u
 }
 
 // Функция, реализующая ведущий регулятор
-long computePIDlinear(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID) {
+long computePIDlinear(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID)
+// Функция, реализующая ведущий регулятор
+{
   static long integralLinear = 0, prevErrLinear = 0;
   if(restartPID == true)
   {
@@ -657,22 +578,8 @@ long computePIDlinear(int input, int setpoint, double kp, double ki, double kd, 
   return (err * kp + ((double)integralLinear)*ki + D * kd);
 }
 
-// Расчет управляющего воздействия алгоритмом 2
-int computeParallel() 
-{ 
-   //расчет наблюдателя
-   Va[0] = (Ae[0][0] * Xa[0] + Ae[0][1] * Xa[1]) + (He[0][0] * Y[0] + He[0][1] * Y[1]) + Be[0] * U; 
-   Va[1] = (Ae[1][0] * Xa[0] + Ae[1][1] * Xa[1]) + (He[1][0] * Y[0] + He[1][1] * Y[1]) + Be[1] * U; 
-   //обновление первичной информации
-   Y[0] = EncoderValue2; 
-   Y[1] = EncoderValue1; 
-   Xa[0] = H[0][0] * Y[0] + H[0][1] * Y[1]; 
-   Xa[1] = H[1][0] * Y[0] + H[1][1] * Y[1]; 
-   U = (int)(-S[0] * Y[0] - S[1] * Xa[0] - S[2] * Y[1] - S[3] * Xa[1]); 
-   return U; 
-} 
-  
-// Обратотка информации с ДУПК
+
+// Обратотка информации с датчика линейного положения
 void UpdateEncoder1() 
 { 
  int MSB = digitalRead(EncoderPinMSB1); //MSB = most significant bit 
@@ -685,7 +592,7 @@ void UpdateEncoder1()
 // AngleValue1 = (double)2 * 3.1415 * EncoderValue1 / 1320; //пересчет показаний в радианы
 } 
 
-// Обратотка информации с ДУПОУ
+// Обратотка информации с датчика углового положения
 void UpdateEncoder2() 
 { 
  int MSB = digitalRead(EncoderPinMSB2); //MSB = most significant bit 
@@ -721,16 +628,10 @@ void SetDisplayMessage(int message)
         LCD.print("local "); // печатаем сообщение на первой строке
       else
         LCD.print("remote "); // печатаем сообщение на первой строке
-      if (State==FALLED){
-        LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
-        LCD.print("Alg('2'):       ");
-        LCD.setCursor(10, 0);
-        LCD.print(index_pid); // печатаем сообщение на первой строке
-      }
-      if (State==STABILISATION){
-        LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
-        LCD.print("   CSU is on   "); // печатаем сообщение на первой строке
-      }
+      LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
+      LCD.print("Alg('2'):       ");
+      LCD.setCursor(10, 0);
+      LCD.print(index_pid); // печатаем сообщение на первой строке
       break;
     case MAXVALUES:
        LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
