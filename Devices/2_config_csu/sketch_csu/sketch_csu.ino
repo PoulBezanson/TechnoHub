@@ -276,10 +276,6 @@ void setup() {
 
 void loop() 
 {
-  
-   
-
-  
   switch(State){
     case READY: // Ожидание
         
@@ -426,6 +422,7 @@ inline __attribute__((always_inline)) void handlerKey(char key){
             //while(EncoderValue2 > (angle_bias - criticalAngle) && EncoderValue2 < (angle_bias + criticalAngle));
             servo_left.write(servo_init_left);
             servo_right.write(servo_init_right);
+            SetDiodColor(XXX);
             State = FALLED;
             break;
       }
@@ -444,6 +441,7 @@ inline __attribute__((always_inline)) void handlerKey(char key){
             break;
           case '4': // Выключение СУД
             //while(EncoderValue2 > (angle_bias - criticalAngle) && EncoderValue2 < (angle_bias + criticalAngle));
+            SetDiodColor(XXX);
             State = FALLED;
             break;
       }

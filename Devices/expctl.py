@@ -79,27 +79,46 @@ if __name__=="__main__":
 				device.get_status_device()=='modification':
 		if device.push_reserve_claims()!=0:
 			while device.push_fix_claim()!=0:
-				# обработка заявки
-				if device.up_is_local_mode()==0:
-					if device.pull_options_data()==0: 
-						if device.down_options_data()==0:
-							if device.up_initional_flag()==0:
-								if device.start_experiment()==0:
-									if device.up_dataset()==0:
-										if device.finish_experiment()==0:
-											if device.processing_dataset()==0:
-												if device.push_data_files()==0:
-													# TO DO
+				# проверка признака режима оборудования
+				responce=device.up_is_local_mode()
+				if responce==0:
+					# запрос параметров эксперимента у сервера
+					responce=device.pull_options_data()
+					if responce==0: 
+						# передача парметров эксперимента в оборудование
+						responce=device.down_options_data()
+						if responce==0:
+							# ожидание флага начальной инициализации
+							responce==device.up_initional_flag()
+							if responce==0:
+								# запуск эксперимента
+								responce=device.start_experiment()
+								if responce==0:
+									# подъем результатов эксперимента
+									responce=device.up_dataset()
+									if responce==0:
+										# окончание эксперимента
+										responce=device.finish_experiment()
+										if responce==0:
+											# первичная обработка результатов эксперимента
+											responce=device.processing_dataset()
+											if responce==0:
+												# отправка на сервер файлов результата экспеимента
+												responce=device.push_data_files()
+												if responce==0:
 													# обработка введного режима
 													if device.get_status_device()=='offline':
-														device.push_unreserve_claims()
+														if device.get_status_device()!='offline':
+															device.status_device=device.push_status_device('offline', device.offline_message, device.db_config)
 														break
 													continue
 				device.push_unfix_claim()
 				device.push_unreserve_claims()
-				if device.get_status_device()!='offline':
-					device.status_device=device.push_status_device('offline', device.offline_message, device.db_config)
-				sys.exit()
+				if responce==1:
+					time.sleep(5)
+					break
+				if responce==2:
+					sys.exit()
 					
 		# выход из главного цикла при modification и disposal
 		# проверка изменения статуса на сервером другими контроллерами

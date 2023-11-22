@@ -1003,7 +1003,7 @@ class Device:
 		else:
 			self.offline_message=f'Incorrect filling of the service_options category in the experiment_manifest.yaml file'
 			print(f'\t [CRASH!] {self.offline_message}')
-			return 1
+			return 2
 		print(f'\t Checking the device\'s remote control mode ...')
 		
 		# считывание значения modbus регистра
@@ -1020,8 +1020,8 @@ class Device:
 			print(f'\t [OK!] {message}')
 			return 0
 		else:	
-			self.offline_message=f'Remote device control NOT confirmed'
-			print(f'\t [FAULT!] {self.offline_message}')
+			message=f'Remote device control NOT confirmed'
+			print(f'\t [FAULT!] {message}')
 			return 1
 				
 		# TO DO : считать значение регистра и сравнить его с нулем
