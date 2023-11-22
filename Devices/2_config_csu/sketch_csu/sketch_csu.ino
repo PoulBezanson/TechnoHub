@@ -10,8 +10,7 @@
 #include <I2Cdev.h>
 
 // Инициализация параметров управления
-#define DEFAULT_CONTROL_PERIOD 10 // Период цикла управления по умолчанию
-int controlPeriod = DEFAULT_CONTROL_PERIOD; // Переменная указывающая требуемый цикл управления
+int control_period = 10; // Период цикла управления по умолчанию (мс)
 unsigned long oldTimeStabilisation = 0; // Время начала предыдущего цикла управления
 unsigned long periodStabilisation = 0;  // Действительное значение цикла управления
 unsigned long oldMenuTime = 0;  // Время нахождения макета неподвижно
@@ -23,9 +22,9 @@ long linearStabAngle = 0; // значение управляющего возд�
 int index_pid = 1; // Код выбранного набора ПИД коэффициентов (0 - внешний набор из контроллера эксперимента)/ Максимум - N_PIDS
 boolean is_local_mode=true; // признак локального управления, иначе - дистанционное
 #define N_PIDS 5 //количество наборов коэффициентов ПИД  регулятора
-int decimals_pids[6]={0,  3,  1, 2, 0, 0}; // размер десятичной части коэффициентов ПИД регулятора
+int pid_decimals[6]={0,  3,  1, 2, 0, 0}; // размер десятичной части коэффициентов ПИД регулятора
 // коэффициенты ПИД регулятора в последовательности {kPangle, kIangle, kDangle, kPlinear, kIlinear, kDlinear}
-double values_pids[N_PIDS][6]={{0, 0, 0, 0, 0, 0},
+double pid_value[N_PIDS][6]={{0, 0, 0, 0, 0, 0},
                               {5, 15,  35, 1, 0,  8},
                               {5, 15,  35,  3,  0,  8},
                               {5, 15,  35,  5,  0,  8},
@@ -65,24 +64,26 @@ char keys[KP_ROWS][KP_COLS] = {{'1', '2', '3', '4'}}; // Массив имён �
 SimpleKeypad pad((char*)keys, rowPins, colPins, KP_ROWS, KP_COLS);  // Объект для работы с клавиатурой
 //
 // Инициализация modbus шины
-#define HOLDING_REGS_SIZE 20 // Количество каналов для OPC сервера
-#define ID   1      // Адрес МК для обмена данными с ОРС сервером
+#define HOLDING_SIZE 11 // Количество каналов для OPC сервера
+#define ID 100      // Адрес МК для обмена данными с ОРС сервером
 Modbus slave(ID, 0, 0);  // Объект для работы с ОРС сервером
-uint16_t holdingRegs[HOLDING_REGS_SIZE]; // Массив тегов
+uint16_t holding[HOLDING_SIZE]; // modbus регистры
+int holding_decimals[HOLDING_SIZE]={0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0};
 // указатели на регистры
-uint16_t *p_angle=holdingRegs;
-uint16_t *p_angle_speed=holdingRegs+1;
-uint16_t *p_position=holdingRegs+2;
-uint16_t *p_position_speed=holdingRegs+3;
-uint16_t *p_control_value=holdingRegs+4;  
-uint16_t *p_is_local_mode=holdingRegs+5; 
-uint16_t *p_is_claim_received=holdingRegs+6;
-uint16_t *p_initional_flag=holdingRegs+7;
-uint16_t *p_duration_time=holdingRegs+8;
-uint16_t *p_delta_angle_bias=holdingRegs+9;
-uint16_t *p_index_pid=holdingRegs+10;
+uint16_t *p_angle=holding;
+uint16_t *p_angle_speed=holding+1;
+uint16_t *p_position=holding+2;
+uint16_t *p_position_speed=holding+3;
+uint16_t *p_control_value=holding+4;  
+uint16_t *p_is_local_mode=holding+5; 
+uint16_t *p_fix_claim_id=holding+6;
+uint16_t *p_initional_flag=holding+7;
+uint16_t *p_duration_time=holding+8;
+uint16_t *p_delta_angle_bias=holding+9;
+uint16_t *p_index_pid=holding+10;
 
-
+// указатели decimals регистров
+int *p_delta_angle_bias_decimals=holding_decimals+9;
 //
 // инициализация датчика линейного положения объекта
 int EncoderPinMSB1 = 2; //пин датчика углового положение колеса //MSB = most significant bit
@@ -166,7 +167,7 @@ long computePIDangle(int input, int setpoint, double kp, double ki, double kd, u
 long computePIDlinear(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID = false);
 
 void setup() {
-  
+  slave.begin(19200);
   TCCR4A = 0b00000011;  // Переключение ШИМ в разрешение 10 бит
   
   // перевод системы вертикализации в начальное состояние
@@ -203,14 +204,21 @@ void setup() {
   State = CALIBRATION;
   
   // Инициализация массива регистров
-  *p_is_local_mode = 1; 
-  *p_is_claim_received=0;
-  *p_initional_flag=0;
-  *p_index_pid=0;
-  *p_duration_time=0;
+  *p_angle=10;
+  *p_angle_speed=20;
+  *p_position=30;
+  *p_position_speed=40;
+  *p_control_value=50;
   
-  slave.begin(9600);
-  slave.poll( holdingRegs, HOLDING_REGS_SIZE);  
+  *p_is_local_mode = true; 
+  *p_fix_claim_id=0;
+  *p_initional_flag=0;
+  *p_duration_time=20;
+  *p_delta_angle_bias=65; // угол соответствует 0.65 градусам См. holding_decimals[]
+  *p_index_pid=1;
+  
+  
+  //slave.poll( holding, HOLDING_SIZE);  
   
   // Настройка портов для работы энкодеров
   pinMode(EncoderPinMSB1, INPUT); //датчик угла 1
@@ -258,6 +266,7 @@ void setup() {
       angle_bias = tmpBias + DEFAULT_BIAS + 25; // поправка при левой калибровке
       isNotDirect=false;
     }
+    //slave.poll(holding, HOLDING_SIZE);
   }
   oldTimeStabilisation = millis();
   
@@ -267,13 +276,9 @@ void setup() {
 
 void loop() 
 {
-  do{ // Пока время, прошедшее с начала цикла меньше, чем период цикла управления
-    periodStabilisation = millis()-oldTimeStabilisation;
-    
-  }while(periodStabilisation < controlPeriod);
-  oldTimeStabilisation = millis();
   
-  
+   
+
   
   switch(State){
     case READY: // Ожидание
@@ -330,8 +335,8 @@ void loop()
           *p_initional_flag=true;
                             
           // Обнуление внутренних переменных регуляторов
-          computePIDlinear(linear_bias, linear_bias, kPlinear, kIlinear, kDlinear, periodStabilisation, true);
-          computePIDangle(angle_bias, angle_bias, kPangle, kIangle, kDangle, periodStabilisation, true); 
+          computePIDlinear(linear_bias, linear_bias, kPlinear, kIlinear, kDlinear, control_period, true);
+          computePIDangle(angle_bias, angle_bias, kPangle, kIangle, kDangle, control_period, true); 
           flagPrint = 0;
           maxLinear = 0;
           maxAngle = 0;
@@ -340,9 +345,15 @@ void loop()
       break;
     
     case STABILISATION:
-      // TO DO
+      // Регулятор времени цикла управления
+      do
+      {
+        periodStabilisation = millis()-oldTimeStabilisation;
+      }
+      while(periodStabilisation < control_period);
+      oldTimeStabilisation = millis(); 
+      
       stabilisation();  // Выработка управляющего воздействия
-      *p_initional_flag=false;
       break;
    
     case FALLED:
@@ -379,28 +390,27 @@ void loop()
         
       if (is_local_mode==false)
       {
-         if (*p_is_claim_received==true)
+         if (*p_fix_claim_id != 0)
          {
             duration_time=*p_duration_time;
-            delta_angle_bias=int(*p_delta_angle_bias*22.22);
+            delta_angle_bias=int(*p_delta_angle_bias*22.22/pow(10,*p_delta_angle_bias_decimals));
             index_pid=*p_index_pid;
             SetStateReady();
          }
       }
+      else
+      {
+        
+      }
+      
+      
    break;
   }
   //  Обработка нажатия кнопки
   char key = pad.getKey();  // Проверка нажатия кнопки
   if(key)  
     handlerKey(key);
-  //
-  // обмен данными по modbus 
-  *p_angle=1;
-  *p_angle_speed=2;
-  *p_position=3;
-  *p_position_speed=4;
-  *p_control_value=5;  
-  slave.poll( holdingRegs, HOLDING_REGS_SIZE);
+  slave.poll(holding, HOLDING_SIZE);
 }
 
 inline __attribute__((always_inline)) void handlerKey(char key){
@@ -429,6 +439,7 @@ inline __attribute__((always_inline)) void handlerKey(char key){
           case '3': // изменение режима управления: local/remote
             if (is_local_mode) is_local_mode=false;
             else is_local_mode=true;
+            *p_is_local_mode=is_local_mode;
             SetDisplayMessage(MENU);
             break;
           case '4': // Выключение СУД
@@ -439,17 +450,23 @@ inline __attribute__((always_inline)) void handlerKey(char key){
       break;
     case FALLED:
       switch(key){
+        case '1':
+          softReset();
+          break;
         case '2': // Переключение набора коэффициентов ПИД регулятора
-            if (is_local_mode)
-            {
-              index_pid+=1;
-              index_pid%=N_PIDS;
-            }
-            break;
+          if (is_local_mode)
+          {
+            index_pid+=1;
+            index_pid%=N_PIDS;
+          }
+          break;
         case '3': // изменение режима управления: local/remote
-            if (is_local_mode) is_local_mode=false;
-            else is_local_mode=true;
-            break;  
+          if (is_local_mode)
+          is_local_mode=false;
+          else is_local_mode=true;
+          *p_is_local_mode=is_local_mode;
+          SetDisplayMessage(MENU);
+          break;  
         case '4': // Переход в режим подготовки к стабилизации
             if (is_local_mode)
             {
@@ -487,6 +504,7 @@ inline __attribute__((always_inline)) void calibration(){
 }
 
 inline __attribute__((always_inline)) void stabilisation()
+// Функция реализующая управляющее воздействие на один период стабилизеции 
 {
   if((EncoderValue2 > (angle_bias - criticalAngle) && EncoderValue2 < (angle_bias + criticalAngle)) && 
     (EncoderValue1 > (linear_bias - criticalLinear) && EncoderValue1 < (linear_bias + criticalLinear)) &&
@@ -494,8 +512,8 @@ inline __attribute__((always_inline)) void stabilisation()
   {
     
       // Расчет управляющего воздействия по алгоритму
-    linearStabAngle = computePIDlinear(EncoderValue1, linear_bias, kPlinear, kIlinear, kDlinear, periodStabilisation);
-    control_value = computePIDangle(EncoderValue2, angle_bias - linearStabAngle, kPangle, kIangle, kDangle, periodStabilisation); 
+    linearStabAngle = computePIDlinear(EncoderValue1, linear_bias, kPlinear, kIlinear, kDlinear, control_period);
+    control_value = computePIDangle(EncoderValue2, angle_bias - linearStabAngle, kPangle, kIangle, kDangle, control_period); 
         
     // Выдача управляющего ШИМ сигнала
     if(control_value < -MIN_POWER)
@@ -537,7 +555,9 @@ inline __attribute__((always_inline)) void stabilisation()
   { // Переход в состояние аварии
     analogWrite(MOTOR_A, LOW);
     analogWrite(MOTOR_B, LOW);
-    *p_is_claim_received=false; // информирование о сбросе заявки
+    *p_fix_claim_id=0; // информирование о сбросе заявки
+    *p_delta_angle_bias=0.65;
+    *p_initional_flag=false;
     State = FALLED;
     SetDiodColor(XXX);
   }
@@ -625,13 +645,21 @@ void SetDisplayMessage(int message)
       LCD.setCursor(0, 1); // ставим курсор на 1 символ второй строки
       LCD.print("Mod('3'): "); 
       if(is_local_mode == true)
+      {
         LCD.print("local "); // печатаем сообщение на первой строке
+        LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
+        LCD.print("Alg('2'):       ");
+        LCD.setCursor(10, 0);
+        LCD.print(index_pid); // печатаем номер заявки на первой строке
+      }
       else
+      {
         LCD.print("remote "); // печатаем сообщение на первой строке
-      LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
-      LCD.print("Alg('2'):       ");
-      LCD.setCursor(10, 0);
-      LCD.print(index_pid); // печатаем сообщение на первой строке
+        LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
+        LCD.print("Claim id:       ");
+        LCD.setCursor(10, 0);
+        LCD.print(*p_fix_claim_id); // печатаем номер заявки на первой строке
+      }
       break;
     case MAXVALUES:
        LCD.setCursor(0, 0); // ставим курсор на 1 символ первой строки
@@ -690,12 +718,12 @@ void SetStateReady()
   State = READY;
   SetDiodColor(RXX);
   // выбор и подготовка коэффициентов ПИД регулятора
-  kPangle=values_pids[index_pid][0]/pow(10,decimals_pids[0]);
-  kIangle=values_pids[index_pid][1]/pow(10,decimals_pids[1]);
-  kDangle=values_pids[index_pid][2]/pow(10,decimals_pids[2]);
-  kPlinear=values_pids[index_pid][3]/pow(10,decimals_pids[3]);
-  kIlinear=values_pids[index_pid][4]/pow(10,decimals_pids[4]);
-  kDlinear=values_pids[index_pid][5]/pow(10,decimals_pids[5]);
+  kPangle=pid_value[index_pid][0]/pow(10,pid_decimals[0]);
+  kIangle=pid_value[index_pid][1]/pow(10,pid_decimals[1]);
+  kDangle=pid_value[index_pid][2]/pow(10,pid_decimals[2]);
+  kPlinear=pid_value[index_pid][3]/pow(10,pid_decimals[3]);
+  kIlinear=pid_value[index_pid][4]/pow(10,pid_decimals[4]);
+  kDlinear=pid_value[index_pid][5]/pow(10,pid_decimals[5]);
 }
 
 

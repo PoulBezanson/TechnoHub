@@ -80,20 +80,21 @@ if __name__=="__main__":
 		if device.push_reserve_claims()!=0:
 			while device.push_fix_claim()!=0:
 				# обработка заявки
-				if device.pull_options_data()==0: 
-					if device.down_options_data()==0:
-						if device.up_initional_flag()==0:
-							if device.start_experiment()==0:
-								if device.up_dataset()==0:
-									if device.finish_experiment()==0:
-										if device.processing_dataset()==0:
-											if device.push_data_files()==0:
-												# TO DO
-												# обработка введного режима
-												if device.get_status_device()=='offline':
-													device.push_unreserve_claims()
-													break
-												continue
+				if device.up_is_local_mode()==0:
+					if device.pull_options_data()==0: 
+						if device.down_options_data()==0:
+							if device.up_initional_flag()==0:
+								if device.start_experiment()==0:
+									if device.up_dataset()==0:
+										if device.finish_experiment()==0:
+											if device.processing_dataset()==0:
+												if device.push_data_files()==0:
+													# TO DO
+													# обработка введного режима
+													if device.get_status_device()=='offline':
+														device.push_unreserve_claims()
+														break
+													continue
 				device.push_unfix_claim()
 				device.push_unreserve_claims()
 				if device.get_status_device()!='offline':

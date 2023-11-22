@@ -8,6 +8,7 @@ time_options:
       ws_regexp: ^([1-9]|10)$
       ws_value: целое число 1 от до 10
       ws_control: field
+      mb_dictionary: null
       mb_reg_name: holding
       mb_reg_address: 8
       mb_reg_type: uint16_t
@@ -19,6 +20,7 @@ time_options:
       ws_regexp: ^([1-9]|10)$
       ws_value: текущее
       ws_control: readonly
+      mb_dictionary: null
       mb_reg_name: null
       mb_reg_address: null
       mb_reg_type: null
@@ -30,6 +32,7 @@ time_options:
       ws_regexp: null
       ws_value: 0.1
       ws_control: readonly
+      mb_dictionary: null
       mb_reg_name: null
       mb_reg_address: null
       mb_reg_type: null
@@ -41,6 +44,7 @@ time_options:
       ws_regexp: null
       ws_value: 1
       ws_control: readonly
+      mb_dictionary: null
       mb_reg_name: null
       mb_reg_address: null
       mb_reg_type: null
@@ -52,13 +56,14 @@ initial_state:
       ws_name: начальный угол
       ws_dimension: град.
       ws_type: integer
-      ws_regexp: ^([1-3])$
-      ws_value: целое число 1 от до 3
+      ws_regexp: ^([1-9]\d?)$
+      ws_value: целое число 1 от до 99
       ws_control: field
+      mb_dictionary: null
       mb_reg_name: holding
       mb_reg_address: 9
       mb_reg_type: uint16_t
-      mb_decimals: 0
+      mb_decimals: 2
 model_parameters:
   name: Параметры модели
   values:
@@ -69,10 +74,11 @@ model_parameters:
       ws_regexp: ^([1-4])$
       ws_value: целое число 1 от до 4
       ws_control: field
+      mb_dictionary: null
       mb_reg_name: holding
       mb_reg_address: 10
-      mb_reg_type: bit
-      mb_decimals: uint16_t
+      mb_reg_type: uint16_t
+      mb_decimals: 0
 influences:
   name: Параметры внешней среды
   values:

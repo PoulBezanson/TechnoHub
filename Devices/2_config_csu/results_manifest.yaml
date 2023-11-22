@@ -40,7 +40,7 @@ dataset_options:
       ws_dimension: град.
       ws_regexp: .*
       ws_control: readonly
-      mb_reg_name: holding
+      mb_reg_name: input
       mb_reg_address: 0
       mb_reg_type: uint16_t
       mb_decimals: 0
@@ -50,7 +50,7 @@ dataset_options:
       ws_dimension: град./сек
       ws_regexp: .*
       ws_control: readonly
-      mb_reg_name: holding
+      mb_reg_name: input
       mb_reg_address: 1
       mb_reg_type: uint16_t
       mb_decimals: 0
@@ -70,7 +70,7 @@ dataset_options:
       ws_dimension: см./cек
       ws_regexp: .*
       ws_control: readonly
-      mb_reg_name: holding
+      mb_reg_name: input
       mb_reg_address: 3
       mb_reg_type: uint16_t
       mb_decimals: 0
@@ -80,7 +80,7 @@ dataset_options:
       ws_dimension: ньютон на метр
       ws_regexp: .*
       ws_control: readonly
-      mb_reg_name: holding
+      mb_reg_name: input
       mb_reg_address: 4
       mb_reg_type: uint16_t
       mb_decimals: 0

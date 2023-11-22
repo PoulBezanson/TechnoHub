@@ -47,7 +47,7 @@ class Device:
 		Конструктор
 		'''
 		self.bus_config=None			# параметры соединения с промышленной шиной
-		self.config_folder='./1_config_aqm'
+		self.config_folder='./2_config_csu'
 		self.connections_config_file='connections_config.yaml' # файл сетевой конфигурации
 		self.connections_config=None	# структура данных c с параметрами сетевой конфигурации 
 		self.dataset=[]					# выходной набор данных
@@ -130,11 +130,14 @@ class Device:
 			self.status_dictionary[s[0]]=s[1]
 		print(f'\t [OK!] Status dictionary formed:\n'
 			  f'\t       {self.status_dictionary}')
+		# попытка чтение манифестов из базы данных
+		try:
+			self.experiment_manifest=self._pull_one_manifest('experiment_manifest')
+			self.options_manifest=self._pull_one_manifest('options_manifest')
+			self.results_manifest=self._pull_one_manifest('results_manifest')
+		except:
+			pass
 		
-		# чтение манифестов из базы данных
-		self.experiment_manifest=self._pull_one_manifest('experiment_manifest')
-		self.options_manifest=self._pull_one_manifest('options_manifest')
-		self.results_manifest=self._pull_one_manifest('results_manifest')
 							
 	def pull_status_device(self, print_message=True):
 		'''
@@ -422,14 +425,6 @@ class Device:
 		'''
 		Передать на установку (в modbus holding регистры) параметры эксперимента
 		'''
-		# Проверка режима управления экспериментальным оборудованием (local/remote)
-		is_local_mode=1
-		service_options=self.experiment_manifest['service_options']
-		options_values=service_options['values']
-		is_local_mode=options_values['is_local_mode']
-		is_local_mode_name=is_local_mode['mb_reg_name']
-		is_local_mode_address=is_local_mode['mb_reg_address']
-		# TO DO : считать значение регистра и сравнить его с нулем
 		
 		parameter_category=['time_options','initial_state', 'model_parameters']
 		# Формирование значений параметров эксперимента для битовых modbus регистров
@@ -439,14 +434,13 @@ class Device:
 			category=self.options_data[name]
 			values=category['values']
 			for key, value in values.items():
-				if value['mb_reg_type']=='bit':	
+				if value['mb_reg_type']=='bit':
 					reg_address=str(value['mb_reg_address'])
 					str_value=value['ws_value']
 					if value['mb_dictionary']!=None:
 						num_value=value['mb_dictionary'][str_value]
 					else:
 						num_value=int(str_value)
-					
 					num_value=int(num_value)<<int(value['mb_decimals'])
 					mask=1<<int(value['mb_decimals'])
 					if reg_address in bit_reg_values:
@@ -475,7 +469,7 @@ class Device:
 			category=self.options_data[name]
 			values=category['values']
 			for key, value in values.items():
-				if value['mb_reg_type']!='bit':
+				if value['mb_reg_type']!='bit' and value['mb_reg_type']!=None:
 					reg_address=str(value['mb_reg_address'])
 					str_value=value['ws_value']
 					if value['mb_dictionary']!=None:
@@ -488,19 +482,28 @@ class Device:
 		# Запись значений в числовые modbus регистры
 		for key, val in reg_values.items():	
 			try:	
-				self.dv_connection.write_register(registeraddress=int(key), value=val, number_of_decimals=0, functioncode=6)
+				self.dv_connection.write_register(registeraddress=int(key), value=int(val), number_of_decimals=0, functioncode=6)
 			except:
 				self.offline_message=f'UNABLE to write options data to modbus value-register {key}'
 				print(f'\t [CRASH!] {self.offline_message}')
 				return 1
 		
-		# Запись в slave признака полученной заявки
-		# TO DO
+		# Запись в slave номер зафиксированной заявки
+		service_options=self.experiment_manifest['service_options']
+		options_values=service_options['values']
+		fix_claim_id=options_values['fix_claim_id']
+		mb_reg_address=fix_claim_id['mb_reg_address']
+		mb_decimals=fix_claim_id['mb_decimals']
+		mb_value=self.fix_claim_id
 		
-		
-		print(f'\t [ОК!] Options data down to device')
-		return 0
-	
+		try:	
+			self.dv_connection.write_register(registeraddress=int(mb_reg_address), value=int(mb_value), number_of_decimals=mb_decimals, functioncode=6)
+			print(f'\t [ОК!] Options data down to device')
+			return 0
+		except:
+			self.offline_message=f'UNABLE to write fix claim {mb_value} id to modbus value-register {mb_reg_address}'
+			print(f'\t [CRASH!] {self.offline_message}')
+			return 1
 	def start_experiment(self):
 		'''
 		Инициализация запуска эксперимента  
@@ -978,6 +981,53 @@ class Device:
 			sys.exit()      
 		return dataset_vector
 	
+	def up_is_local_mode(self):
+		'''
+		Поднять значение режима управления оборудования: местное (local) или удаленное (remote)
+		'''
+		# считывание параметров modbus регистра для инициализации чтения
+		service_options=self.experiment_manifest['service_options']
+		options_values=service_options['values']
+		is_local_mode=options_values['is_local_mode']
+		is_local_mode_taget=is_local_mode['mb_value']
+		is_local_mode_name=is_local_mode['mb_reg_name']
+		is_local_mode_address=is_local_mode['mb_reg_address']
+		is_local_mode_decimals=is_local_mode['mb_decimals']
+		is_local_mode_value=1
+		
+		# формирование аргументов modbus функции чтения регистров
+		if is_local_mode_name=='holding':
+			function_code = 3
+		elif is_local_mode_name=='input':
+			function_code = 4
+		else:
+			self.offline_message=f'Incorrect filling of the service_options category in the experiment_manifest.yaml file'
+			print(f'\t [CRASH!] {self.offline_message}')
+			return 1
+		print(f'\t Checking the device\'s remote control mode ...')
+		
+		# считывание значения modbus регистра
+		#try:
+		is_local_mode_value=self.dv_connection.read_register(registeraddress=is_local_mode_address,\
+													number_of_decimals=is_local_mode_decimals,\
+															functioncode=function_code)
+		#except:
+		#	print(f'\t [FAULT!] Connection problem with device')
+		
+		# проверка флага местного управления оборудованием
+		if is_local_mode_value==is_local_mode_taget:
+			message=f'Remote device control confirmed'
+			print(f'\t [OK!] {message}')
+			return 0
+		else:	
+			self.offline_message=f'Remote device control NOT confirmed'
+			print(f'\t [FAULT!] {self.offline_message}')
+			return 1
+				
+		# TO DO : считать значение регистра и сравнить его с нулем
+		
+		return 0
+	
 	def up_initional_flag(self):
 		'''
 		Контролировать поднятие флага инициализации установки 
@@ -1019,6 +1069,7 @@ class Device:
 			counter=int(max_initional_time-(dt.datetime.now().timestamp()-time_start))
 		print(f'\n')
 		
+		# проверка флага готовности к эксперименту
 		if initional_flag_value==initional_flag_taget:
 			message=f'Initional state done for {max_initional_time-counter} sec.'
 			print(f'\t [OK!] {message}')
