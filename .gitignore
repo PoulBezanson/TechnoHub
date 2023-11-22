@@ -2,5 +2,8 @@ Devices/captured.*
 Devices/__pycache__
 Devices/modules/__pycache__
 .gitignore
-Devices/1_config_aqm/connections_config.yaml
-Devices/2_config_csu/connections_config.yaml
+connections_config.yaml
+captured.*
+
+
+
