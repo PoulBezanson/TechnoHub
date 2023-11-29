@@ -554,7 +554,7 @@ inline __attribute__((always_inline)) void stabilisation()
     analogWrite(MOTOR_A, LOW);
     analogWrite(MOTOR_B, LOW);
     *p_fix_claim_id=0; // информирование о сбросе заявки
-    *p_delta_angle_bias=0.65;
+    *p_delta_angle_bias=DEFAULT_DELTA_ANGLE;
     *p_initional_flag=false;
     State = FALLED;
     SetDiodColor(XXX);

@@ -52,22 +52,29 @@ if __name__=="__main__":
 		      f'[{device.get_status_device()}]: Manifests update...')
 	device.push_all_manifests()
 	
-	# удаление заявок при смене статуса на "disposal"
-	if device.get_status_device()=='disposal':
-		device.push_delete_claims()
-	
-	# проверка условия завершения работы контроллера
-	if device.get_status_device()=='offline' or device.get_status_device()=='disposal':
-		print(f'\t       Stop controller')
-		del device
-		sys.exit()
-		
 	# проверка связи с экспериментальной установкой
 	print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 		      f'[{device.get_status_device()}]: Connection with device...')
 	device.set_modbus_connection()
-	device.up_dataset_vector()
+	
+	while True:
+		# удаление заявок при смене статуса на "disposal"
+		if device.get_status_device()=='disposal':
+			device.push_delete_claims()
 		
+		# проверка условия завершения работы контроллера
+		if device.get_status_device()=='offline' or device.get_status_device()=='disposal':
+			print(f'\t     Stop controller')
+			del device
+			sys.exit()
+				
+		if (device.up_dataset_vector()!=1):
+			break
+		
+		
+		time.sleep(5)
+		continue
+			
 	'''
 	2 этап - реализация режима
 	'''
@@ -132,6 +139,6 @@ if __name__=="__main__":
 			device.push_delete_claims()
 			break
 		#continue
-	print(f'\n\t         Stop controller')
+	print(f'\n\t       Stop controller')
 	
 	

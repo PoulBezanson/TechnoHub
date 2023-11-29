@@ -477,12 +477,12 @@ class Device:
 					else:
 						num_value=str_value
 					reg_values[reg_address]=num_value
-					reg_decimals=value['mb_decimals']
-		
+					reg_decimals[reg_address]=value['mb_decimals']
+							
 		# Запись значений в числовые modbus регистры
 		for key, val in reg_values.items():	
 			try:	
-				self.dv_connection.write_register(registeraddress=int(key), value=int(val), number_of_decimals=0, functioncode=6)
+				self.dv_connection.write_register(registeraddress=int(key), value=float(val), number_of_decimals=int(reg_decimals[key]), functioncode=6)
 			except:
 				self.offline_message=f'UNABLE to write options data to modbus value-register {key}'
 				print(f'\t [CRASH!] {self.offline_message}')
@@ -820,14 +820,23 @@ class Device:
 			self.dv_connection.serial.timeout  = self.bus_config['time_out']
 			self.dv_connection.mode = minimalmodbus.MODE_RTU   # rtu or ascii mode
 			self.dv_connection.clear_buffers_before_each_transaction = True
-		except:
-			message='NO divice connection by modbus'
-			print(f'\t [CRASH!] {message}')
-			self.status_device=self.push_status_device('offline', message)
-			print(f'\t Stop controller')
-			sys.exit() 
-		else:
 			print('\t','[OK!] Connected to device by modbus')
+			return 0
+		except:
+			self.offline_message='NO divice connection by modbus'
+			print(f'\t [CRASH!] {self.offline_message}')
+			self.status_device=self.push_status_device('offline', self.offline_message)
+			print(f'\t Stop controller')
+			return 0
+		
+			
+	
+	def set_offline_message(self, message):
+		'''
+		Установить новое сообщения об отказе
+		'''
+		self.offline_message=message
+		return 0
 	
 	def _init_videocam(self):
 		'''
@@ -913,6 +922,13 @@ class Device:
 		
 		return mb_initial_commands
 	
+	def get_offline_message(self, message):
+		'''
+		Получить текущее значение сообщения об отказе
+		'''
+		return self.offline_message
+	
+	
 	def up_dataset(self):
 		'''
 		Считать с объекта весь набор данных эксперимента
@@ -948,10 +964,12 @@ class Device:
 		address=self.mb_args_dataset['register_address']
 		number=self.mb_args_dataset['number_of_registers']
 		code=self.mb_args_dataset['function_code']
+		
 		# чтение манифеста параметров эксперимента - options_manifest.yaml
 		dataset_options=self.options_manifest['time_options']
 		values=dataset_options['values']
 		delta_time=values['delta_time']['ws_value']
+		
 		# формирование выходного вектора
 		time_start=dt.datetime.now().timestamp()			
 		try:
@@ -960,10 +978,11 @@ class Device:
 															functioncode=code)	
 		except:
 			message='Dataset vector NOT read by modbus'
-			print(f'\t [CRASH!] {message}')
-			self.status_device=self.push_status_device('offline', message)
-			print(f'\t Stop controller')
-			sys.exit()   
+			print(f'\t [FAULT!] {message}')
+			#self.status_device=self.push_status_device('offline', message)
+			#print(f'\t Stop controller')
+			return 1
+			#sys.exit()   
 		# формирование время опроса вектора
 		time_reading=dt.datetime.now().timestamp()-time_start			
 		dataset_vector=[time_start]+[time_reading]+dataset_vector
@@ -975,10 +994,11 @@ class Device:
 			print(f'\t [OK!] {description}')
 		else:
 			message=f'Time_reading={time_reading} (>={delta_time}). It is NOT correct'
-			print(f'\t [CRASH!] {message}')
-			self.status_device=self.push_status_device('offline', message)
-			print(f'\t Stop controller')
-			sys.exit()      
+			print(f'\t [FAULT!] {message}')
+			#self.status_device=self.push_status_device('offline', message)
+			#print(f'\t Stop controller')
+			return 1
+			#sys.exit()      
 		return dataset_vector
 	
 	def up_is_local_mode(self):

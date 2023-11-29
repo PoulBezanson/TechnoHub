@@ -55,9 +55,9 @@ initial_state:
     delta_angle_bias:
       ws_name: начальный угол
       ws_dimension: град.
-      ws_type: integer
-      ws_regexp: ^([1-9]\d?)$
-      ws_value: целое число 1 от до 99
+      ws_type: float
+      ws_regexp: ^(0\.[5-9]|1\.[0-9]|2\.[0-9]|3\.0)$
+      ws_value: число от 0.5 от до 3.0 в формате X.X
       ws_control: field
       mb_dictionary: null
       mb_reg_name: holding
@@ -71,8 +71,8 @@ model_parameters:
       ws_name: номер алгоритма
       ws_dimension: номер
       ws_type: integer
-      ws_regexp: ^([1-4])$
-      ws_value: целое число 1 от до 4
+      ws_regexp: ^([1-4]|0)$
+      ws_value: целое число 0 от до 4
       ws_control: field
       mb_dictionary: null
       mb_reg_name: holding
