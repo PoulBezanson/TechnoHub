@@ -28,6 +28,7 @@ import socket
 import subprocess
 import cv2 # https://docs.opencv.org/4.7.0/
 import shutil
+import zipfile
 
 # шина событий
 event_up_vector=threading.Event() # флаг управления чтением вектора данных с устройства
@@ -66,7 +67,7 @@ class Device:
 		self.options_manifest_file='options_manifest.yaml' # файл общей конфигурации эксперимента
 		self.options_manifest=None      # структура данных манифеста параметров 
 		self.option_manifest=None    	# структура json со спецификациями эксперимента
-		self.output_files={}			# словарь выходных файлов для отправки на сервер
+		self.output_files=[]			# список выходных файлов для отправки на сервер
 		self.results_manifest_file='results_manifest.yaml' # файл общей конфигурации эксперимента
 		self.results_manifest=None      # структура данных результатов эксперимента
 		self.status_device=None			# текущий статус установки
@@ -76,6 +77,7 @@ class Device:
 		self.thread_delta_timer=None	# поток таймера дискретизации
 		self.videocam=None				# экземпляр класса видеокамеры
 		self.videocam_out=None			# экземпляр класса выходного видео файла
+		self.zip_file_name=None         # название выходного zip файла
 		
 		# действия инициализации контроллера
 		self.init_controller()			# вызов дополнительной процедуры инициализации
@@ -170,34 +172,15 @@ class Device:
 		print(f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} '
 		      f'[{self.status_device}]: ',end=' ')
 		print(f'Data set processing...')
-		# подготовка параметров временного видео файла
-		video_options=self.results_manifest['video_options']
-		values=video_options['values']
-		extension=values['extension']
-		temp_videofile_name=extension['temp_name']
-		videofile_extension=extension['value']
-		temp_videofile_name=temp_videofile_name+'.'+videofile_extension
-		videofile_suffix=extension['suffix']
-		self.temp_output_files[videofile_suffix]=temp_videofile_name # добавление имени файла в словарь
-		
-		# подготовка параметров целевого видео файла
-		videofile_name=self.fix_claim_id + '_' + videofile_suffix + '.' + videofile_extension
-		self.output_files[videofile_suffix]=videofile_name # добавление имени файла в словарь
-				
-		# подготовка параметров временного файла данных
+						
+		# подготовка параметров целевого файла данных
 		dataset_options=self.results_manifest['dataset_options']
 		values=dataset_options['values']
-		extension=values['extension']
-		temp_datafile_name=extension['temp_name']
-		datafile_extension=extension['value']
-		temp_datafile_name=temp_datafile_name+'.'+datafile_extension
-		datafile_suffix=extension['suffix']
-		self.temp_output_files[datafile_suffix]=temp_datafile_name # добавление имени файла в словарь
-		
-		# подготовка параметров целевого файла данных
+		name=values['name']
+		datafile_extension=name['extension']
+		datafile_suffix=name['suffix']
 		datafile_name=self.fix_claim_id + '_' + datafile_suffix + '.' + datafile_extension
-		self.output_files[datafile_suffix]=datafile_name # добавление имени файла в словарь
-		print(f"\t Parameters of temporary and target files are formed")
+		print(f"\t Parameters of target files are formed")
 		
 		# формирование названия полей таблицы данных
 		dataset_options=self.results_manifest['dataset_options']
@@ -247,22 +230,30 @@ class Device:
 		# запись данных во временный файл
 		separator=';' # разделитель данных в выходном файле
 		decimal=','   # разделитель дробной чати в выходном файле
-		dataframe.to_csv(path_or_buf=temp_datafile_name, sep=separator, decimal=decimal)
-		print(f"\t [OK!] The dataset is written to a temporary file : {temp_datafile_name}")
+		dataframe.to_csv(path_or_buf=datafile_name, sep=separator, decimal=decimal)
+		self.output_files.append(datafile_name) # добавление имени файла в список
+		print(f"\t [OK!] The dataset is written to file : {datafile_name}")
+		
+		# удаление zip файлов из текущей папки
+		for file_name in os.listdir(os.curdir):
+			if file_name.endswith('.zip'):
+				os.remove(file_name)
+				print(f"\t [ОК!] The file {file_name} deleted from work folder")
 				
-		# операции копирования и удаления над файлами
-		for key, item in self.output_files.items():
-			file_name=self.output_files[key]
-			temp_file_name=self.temp_output_files[key]
-			if os.path.exists(temp_file_name):
-				shutil.copyfile(temp_file_name, file_name)
-				#os.remove(temp_videofile_name)
-				print(f"\t [OK!] Created file {file_name}")
-			else:
-				self.offline_message=f'File {file_name} not exist'
-				print(f" \t [CRASH!] {self.offline_message}")
-				return 1
-		print(f"\t [OK!] File copy and delete operations completed")
+		# операции zip архивирования и удаления файлов
+		self.zip_file_name=self.fix_claim_id + '_' + 'data' + '.' + 'zip'
+		with zipfile.ZipFile(self.zip_file_name, mode='w') as my_zipfile:
+			for file_name in self.output_files:
+				# Добавляем файлы в архив
+				if os.path.exists(file_name):
+					my_zipfile.write(file_name)
+					os.remove(file_name)
+					print(f"\t [OK!] Added {file_name} to ZIP archive")
+				else:
+					message=f'File {file_name} not exist'
+					print(f" \t [FAULT!] {message}")
+		print(f"\t [OK!] Operations with archive completed")
+		self.output_files=[]
 		return 0		
 	
 	def pull_options_data(self):
@@ -353,28 +344,20 @@ class Device:
 		user=fileserver_config['user']
 		host=fileserver_config['host']
 		folder=fileserver_config['folder']
+		# упаковка файлов в архив
+		
 		# передача  файла на сервер
-		for key, item in self.output_files.items():
-			file_name=self.output_files[key]
-			counter=5 # максимальное время ожидания файла в папке
-			while not os.path.exists(file_name) and counter>0:
-				time.sleep(1)
-				counter=counter+1
-			if counter==0:
-				self.offline_message=f'File {file_name} NOT found'
-				print(f'\t [CRASH!] {self.offline_message}')
-				return 1
-			rsync_command = f"rsync -avz -e ssh {file_name} {user}@{host}:{folder}"
-			subprocess.run(rsync_command, shell=True)
-			print(f"\t [ОК!] The file {file_name} was sent to the server")
-			# удаление файла из текущей папки
-			os.remove(file_name)
-			if not os.path.exists(file_name):
-				print(f"\t [ОК!] The file {file_name} deleted from work folder")
-			else:
-				self.offline_message=f'File {file_name} NOT deleted'
-				print("[CRASH!] {self.offline_message}")
-				return 1
+		counter=5 # максимальное время ожидания файла в папке
+		while not os.path.exists(self.zip_file_name) and counter>0:
+			time.sleep(1)
+			counter=counter+1
+		if counter==0:
+			self.offline_message=f'File {self.zip_file_name} NOT found'
+			print(f'\t [CRASH!] {self.offline_message}')
+			return 1
+		rsync_command = f"rsync -avz -e ssh {self.zip_file_name} {user}@{host}:{folder}"
+		subprocess.run(rsync_command, shell=True)
+		print(f"\t [ОК!] The file {self.zip_file_name} was sent to the server")
 		return 0
 		
 	def push_delete_claims(self):
@@ -845,9 +828,11 @@ class Device:
 		# параметры временного видео файла
 		video_options=self.results_manifest['video_options']
 		values=video_options['values']
-		extension=values['extension']
-		temp_videofile_name=extension['temp_name']
-		videofile_extension=extension['value']
+		name=values['name']
+		videofile_suffix=name['suffix']
+		videofile_extension=name['extension']
+		videofile_name=self.fix_claim_id + '_' + videofile_suffix + '.' + videofile_extension
+		self.output_files.append(videofile_name)
 		
 		# параметры видео камеры 
 		codec=values['codec']
@@ -864,8 +849,7 @@ class Device:
 			print(f'\t [CRASH!] {self.offline_message}')
 			return 1
 		videocodec=cv2.VideoWriter_fourcc(*videofile_codec)
-		temp_videofile_name=temp_videofile_name + '.' + videofile_extension
-		self.videocam_out=cv2.VideoWriter(temp_videofile_name, videocodec, videocam_fps, videocam_size)
+		self.videocam_out=cv2.VideoWriter(videofile_name, videocodec, videocam_fps, videocam_size)
 		print(f'\t [OK!] Video camera captured')
 		return 0
 		
