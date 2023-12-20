@@ -21,14 +21,15 @@ long control_value = 0; // значение управляющего возде�
 long linearStabAngle = 0; // значение управляющего воздействия для алгоритма 2
 int index_pid = 1; // Код выбранного набора ПИД коэффициентов (0 - внешний набор из контроллера эксперимента)/ Максимум - N_PIDS
 boolean is_local_mode=true; // признак локального управления, иначе - дистанционное
-#define N_PIDS 5 //количество наборов коэффициентов ПИД  регулятора
-int pid_decimals[6]={0,  3,  1, 2, 0, 0}; // размер десятичной части коэффициентов ПИД регулятора
+#define N_PIDS 6 //количество наборов коэффициентов ПИД  регулятора
+int pid_decimals[6]={0,  3,  1, 2, 7, 0}; // размер десятичной части коэффициентов ПИД регулятора
 // коэффициенты ПИД регулятора в последовательности {kPangle, kIangle, kDangle, kPlinear, kIlinear, kDlinear}
 double pid_value[N_PIDS][6]={{0, 0, 0, 0, 0, 0},
                               {5, 15,  35, 1, 0,  8},
                               {5, 15,  35,  3,  0,  8},
                               {5, 15,  35,  5,  0,  8},
-                              {7, 15,  35,  3,  0,  8}}; 
+                              {7, 15,  35,  3,  0,  8},
+                              {7, 15,  35,  3,  1,  8}}; 
 //
 // Инициализация физических параметров установки
 #define R 3.17  // Радиус колеса
@@ -64,26 +65,28 @@ char keys[KP_ROWS][KP_COLS] = {{'1', '2', '3', '4'}}; // Массив имён �
 SimpleKeypad pad((char*)keys, rowPins, colPins, KP_ROWS, KP_COLS);  // Объект для работы с клавиатурой
 //
 // Инициализация modbus шины
-#define HOLDING_SIZE 11 // Количество каналов для OPC сервера
+#define HOLDING_SIZE 13 // Количество каналов для OPC сервера
 #define ID 100      // Адрес МК для обмена данными с ОРС сервером
 Modbus slave(ID, 0, 0);  // Объект для работы с ОРС сервером
 uint16_t holding[HOLDING_SIZE]; // modbus регистры
-int holding_decimals[HOLDING_SIZE]={0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0};
+int holding_decimals[HOLDING_SIZE]={0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0};
 // указатели на регистры
-uint16_t *p_angle=holding;
-uint16_t *p_angle_speed=holding+1;
-uint16_t *p_position=holding+2;
-uint16_t *p_position_speed=holding+3;
-uint16_t *p_control_value=holding+4;  
-uint16_t *p_is_local_mode=holding+5; 
-uint16_t *p_fix_claim_id=holding+6;
-uint16_t *p_initional_flag=holding+7;
-uint16_t *p_duration_time=holding+8;
-uint16_t *p_delta_angle_bias=holding+9;
-uint16_t *p_index_pid=holding+10;
+uint16_t *p_angle=holding;               // адрес согласовать с result_manifest.yaml
+uint16_t *p_angle_speed=holding+1;       // адрес согласовать с result_manifest.yaml
+uint16_t *p_angle_integral=holding+2;    // адрес согласовать с result_manifest.yaml
+uint16_t *p_position=holding+3;          // адрес согласовать с result_manifest.yaml
+uint16_t *p_position_speed=holding+4;    // адрес согласовать с result_manifest.yaml
+uint16_t *p_position_integral=holding+5; // адрес согласовать с result_manifest.yaml
+uint16_t *p_control_value=holding+6;     // адрес согласовать с result_manifest.yaml
+uint16_t *p_is_local_mode=holding+7;     // адрес согласовать с experiment_manifest.yaml
+uint16_t *p_fix_claim_id=holding+8;      // адрес согласовать с experiment_manifest.yaml
+uint16_t *p_initional_flag=holding+9;    // адрес согласовать с experiment_manifest.yaml
+uint16_t *p_duration_time=holding+10;    // адрес согласовать с option_manifest.yaml
+uint16_t *p_delta_angle_bias=holding+11;  // адрес согласовать с option_manifest.yaml
+uint16_t *p_index_pid=holding+12;        // адрес согласовать с option_manifest.yaml
 
 // указатели decimals регистров
-int *p_delta_angle_bias_decimals=holding_decimals+9;
+int *p_delta_angle_bias_decimals=holding_decimals+11;
 //
 // инициализация датчика линейного положения объекта
 int EncoderPinMSB1 = 2; //пин датчика углового положение колеса //MSB = most significant bit
@@ -112,29 +115,34 @@ int delta_angle_bias=(int) (DEFAULT_DELTA_ANGLE*22.22); //Преобразова
 //
 // Инициализация LCD дисплея
 LCD_1602_RUS LCD(0x27, 16, 2);  // Объект для вывода информации на дисплей
-int flagPrint = 0;  // Признак вывода основого текста при включенной СУД на дисплей
 int maxLinear = 0;  // Максимально достигнутое смещение для отображения
 int maxAngle = 0;  // Максимально достигнутое угловое отклонение для отображения 
 int prevMaxLinear = 0;  // Предыдущее максимально достигнутое смещение для отображения
 int prevMaxAngle = 0;  // Предыдущее максимально достигнутое угловое отклонение для отображения
 //
+
 // Инициализация ПИД коэффициентов
-double kPangle = 5.0;  // Пропорциональный коэффициент ПИД2
-double kIangle = 0.015; // Интегральный коэффициент ПИД2 
-double kDangle = 3.5; // Дифференциальный коэффициент ПИД2
+double kPangle = 0;  // Пропорциональный коэффициент ПИД2
+double kIangle = 0; // Интегральный коэффициент ПИД2 
+double kDangle = 0; // Дифференциальный коэффициент ПИД2
 
-double kPlinear = 0.01; // Пропорциональный коэффициент ПИД1
-double kIlinear = 0.0; // Интегральный коэффициент ПИД1
-double kDlinear = 8.0; // Дифференциальный коэффициент ПИД1
+double kPlinear = 0; // Пропорциональный коэффициент ПИД1
+double kIlinear = 0; // Интегральный коэффициент ПИД1
+double kDlinear = 0; // Дифференциальный коэффициент ПИД1
 
-double kPangle2 = 15.0;  // Пропорциональный коэффициент ПИД2
-double kIangle2 = 0.0; // Интегральный коэффициент ПИД2 
-double kDangle2 = 5.0; // Дифференциальный коэффициент ПИД2
+double kPangle2 = 0;  // Пропорциональный коэффициент ПИД2
+double kIangle2 = 0; // Интегральный коэффициент ПИД2 
+double kDangle2 = 0; // Дифференциальный коэффициент ПИД2
 
-double kPlinear2 = 1.5; // Пропорциональный коэффициент ПИД1
-double kIlinear2 = 0.0; // Интегральный коэффициент ПИД1
-double kDlinear2 = 1.0; // Дифференциальный коэффициент ПИД1
-//
+double kPlinear2 = 0; // Пропорциональный коэффициент ПИД1
+double kIlinear2 = 0; // Интегральный коэффициент ПИД1
+double kDlinear2 = 0; // Дифференциальный коэффициент ПИД1
+
+// Инициализация параметров движение
+long  old_position = 0;
+long  my_position_integral = 0;
+long  old_angle = 0;
+long  my_angle_integral = 0;
 
 //инициализация исходной информации модели для регулятора 2
 float Ae[2][2] = { -0.364912, 0.053954, -4.178116, 0.584912}; 
@@ -163,8 +171,9 @@ enum{ // Режим отображения дисплея
 } DisplayMode;
 
 
-long computePIDangle(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID = false);
-long computePIDlinear(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID = false);
+long computePIDangle(int input, int setpoint, double kp, double ki, double kd, unsigned long dt);
+long computePIDlinear(int input, int setpoint, double kp, double ki, double kd, unsigned long dt);
+
 
 void setup() {
   slave.begin(19200);
@@ -204,12 +213,13 @@ void setup() {
   State = CALIBRATION;
   
   // Инициализация массива регистров
-  *p_angle=10;
-  *p_angle_speed=20;
-  *p_position=30;
-  *p_position_speed=40;
-  *p_control_value=50;
-  
+  *p_angle=0;
+  *p_angle_speed=0;
+  *p_angle_integral=0;
+  *p_position=0;
+  *p_position_speed=0;
+  *p_position_integral=0;
+  *p_control_value=0;
   *p_is_local_mode = true; 
   *p_fix_claim_id=0;
   *p_initional_flag=0;
@@ -330,10 +340,13 @@ void loop()
           SetDiodColor(XXG);
           *p_initional_flag=true;
                             
-          // Обнуление внутренних переменных регуляторов
-          computePIDlinear(linear_bias, linear_bias, kPlinear, kIlinear, kDlinear, control_period, true);
-          computePIDangle(angle_bias, angle_bias, kPangle, kIangle, kDangle, control_period, true); 
-          flagPrint = 0;
+          // !!! Обнуление внутренних переменных регуляторов
+          old_position = 0;
+          my_position_integral = 0;
+          old_angle = 0;
+          my_angle_integral = 0;
+                   
+          // обнуление значений максимального отклонения объекта от цели
           maxLinear = 0;
           maxAngle = 0;
         }
@@ -502,7 +515,7 @@ inline __attribute__((always_inline)) void calibration(){
 }
 
 inline __attribute__((always_inline)) void stabilisation()
-// Функция реализующая управляющее воздействие на один период стабилизеции 
+// Функция реализующая управляющее воздействие на один период стабилизации 
 {
   if((EncoderValue2 > (angle_bias - criticalAngle) && EncoderValue2 < (angle_bias + criticalAngle)) && 
     (EncoderValue1 > (linear_bias - criticalLinear) && EncoderValue1 < (linear_bias + criticalLinear)) &&
@@ -512,6 +525,8 @@ inline __attribute__((always_inline)) void stabilisation()
       // Расчет управляющего воздействия по алгоритму
     linearStabAngle = computePIDlinear(EncoderValue1, linear_bias, kPlinear, kIlinear, kDlinear, control_period);
     control_value = computePIDangle(EncoderValue2, angle_bias - linearStabAngle, kPangle, kIangle, kDangle, control_period); 
+    *p_control_value=control_value;
+    
         
     // Выдача управляющего ШИМ сигнала
     if(control_value < -MIN_POWER)
@@ -561,39 +576,32 @@ inline __attribute__((always_inline)) void stabilisation()
   }
 }
 
-long computePIDangle(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID)
+long computePIDangle(int input, int setpoint, double kp, double ki, double kd, unsigned long dt)
 // Функция, реализующая подчиненный регулятор
 {
-  static long integralAngle = 0, prevErrAngle = 0;
-  if(restartPID == true)
-  {
-    integralAngle = 0;
-    prevErrAngle = 0;
-    return 0;
-  }
-  int err = setpoint - input;
-  integralAngle += err * dt;
-  double D = ((double)(err - prevErrAngle)) / dt;
-  prevErrAngle = err;
-  return (err * kp + ((double)integralAngle)*ki + D * kd);
+  int my_angle = setpoint - input;
+  my_angle_integral += my_angle * dt;
+  double my_angle_speed = ((double)(my_angle - old_angle)) / dt;
+  old_angle = my_angle;
+  *p_angle=my_angle;
+  *p_angle_integral=my_angle_integral;
+  *p_angle_speed=my_angle_speed;
+  return (my_angle * kp + ((double)my_angle_integral)*ki + my_angle_speed * kd);
 }
 
+
+long computePIDlinear(int input, int setpoint, double kp, double ki, double kd, unsigned long dt)
 // Функция, реализующая ведущий регулятор
-long computePIDlinear(int input, int setpoint, double kp, double ki, double kd, unsigned long dt, bool restartPID)
-// Функция, реализующая ведущий регулятор
+// control_value = computePIDangle(EncoderValue2, angle_bias - linearStabAngle, kPangle, kIangle, kDangle, control_period);
 {
-  static long integralLinear = 0, prevErrLinear = 0;
-  if(restartPID == true)
-  {
-    integralLinear = 0;
-    prevErrLinear = 0;
-    return 0;
-  }
-  int err = setpoint - input;
-  integralLinear += err * dt;
-  double D = ((double)(err - prevErrLinear)) / dt;
-  prevErrLinear = err;
-  return (err * kp + ((double)integralLinear)*ki + D * kd);
+  int my_position = setpoint - input;
+  my_position_integral += my_position * dt;
+  double my_position_speed = ((double)(my_position - old_position)) / dt;
+  old_position = my_position;
+  *p_position=my_position;
+  *p_position_integral=my_position_integral;
+  *p_position_speed=my_position_speed;
+  return (my_position * kp + ((double)my_position_integral)*ki + my_position_speed * kd);
 }
 
 
@@ -723,7 +731,6 @@ void SetStateReady()
   kIlinear=pid_value[index_pid][4]/pow(10,pid_decimals[4]);
   kDlinear=pid_value[index_pid][5]/pow(10,pid_decimals[5]);
 }
-
 
 // Перезагрузка МК
 void softReset() {

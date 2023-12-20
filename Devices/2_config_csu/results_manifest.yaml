@@ -42,7 +42,7 @@ dataset_options:
       ws_control: readonly
       mb_reg_name: input
       mb_reg_address: 0
-      mb_reg_type: uint16_t
+      mb_reg_type: int16_t
       mb_decimals: 0
     angle_speed:
       ws_name: угловая скорость
@@ -52,7 +52,17 @@ dataset_options:
       ws_control: readonly
       mb_reg_name: input
       mb_reg_address: 1
-      mb_reg_type: uint16_t
+      mb_reg_type: int16_t
+      mb_decimals: 0
+    angle_integral:
+      ws_name: интеграл от угла
+      ws_value: angle_integral
+      ws_dimension: град.*сек
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: input
+      mb_reg_address: 2
+      mb_reg_type: int16_t
       mb_decimals: 0
     position:
       ws_name: линейное положение
@@ -61,8 +71,8 @@ dataset_options:
       ws_regexp: .*
       ws_control: readonly
       mb_reg_name: holding
-      mb_reg_address: 2
-      mb_reg_type: uint16_t
+      mb_reg_address: 3
+      mb_reg_type: int16_t
       mb_decimals: 0
     position_speed:
       ws_name: линейная скорость
@@ -71,8 +81,18 @@ dataset_options:
       ws_regexp: .*
       ws_control: readonly
       mb_reg_name: input
-      mb_reg_address: 3
-      mb_reg_type: uint16_t
+      mb_reg_address: 4
+      mb_reg_type: int16_t
+      mb_decimals: 0
+    position_integral:
+      ws_name: интеграл от линейного положения
+      ws_value: position_integral
+      ws_dimension: см.*cек
+      ws_regexp: .*
+      ws_control: readonly
+      mb_reg_name: input
+      mb_reg_address: 5
+      mb_reg_type: int16_t
       mb_decimals: 0
     control_value:
       ws_name: управляющее значение
@@ -81,8 +101,8 @@ dataset_options:
       ws_regexp: .*
       ws_control: readonly
       mb_reg_name: input
-      mb_reg_address: 4
-      mb_reg_type: uint16_t
+      mb_reg_address: 6
+      mb_reg_type: int16_t
       mb_decimals: 0
 video_options:
   name: Параметры выходного видеофайла

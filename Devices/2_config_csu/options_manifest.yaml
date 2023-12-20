@@ -61,7 +61,7 @@ initial_state:
       ws_control: field
       mb_dictionary: null
       mb_reg_name: holding
-      mb_reg_address: 9
+      mb_reg_address: 11
       mb_reg_type: uint16_t
       mb_decimals: 2
 model_parameters:
@@ -76,7 +76,7 @@ model_parameters:
       ws_control: field
       mb_dictionary: null
       mb_reg_name: holding
-      mb_reg_address: 10
+      mb_reg_address: 12
       mb_reg_type: uint16_t
       mb_decimals: 0
 influences:

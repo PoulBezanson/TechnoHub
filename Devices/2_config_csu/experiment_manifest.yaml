@@ -25,21 +25,21 @@ service_options:
     is_local_mode:
       name: признак местного управления от slave
       mb_reg_name: holding
-      mb_reg_address: 5
+      mb_reg_address: 7
       mb_reg_type: uint16_t
       mb_decimals: 0
       mb_value: 0
     fix_claim_id:
       name: номер обрабатываемой заявки в slave
       mb_reg_name: holding
-      mb_reg_address: 6
+      mb_reg_address: 8
       mb_reg_type: uint16_t
       mb_decimals: 0
       mb_value: 0
     initional_flag:
       name: признак начальной инициализации установки от slave
       mb_reg_name: holding
-      mb_reg_address: 7
+      mb_reg_address: 9
       mb_reg_type: uint16_t
       mb_decimals: 0
       mb_value: 1
