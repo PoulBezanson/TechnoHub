@@ -15,7 +15,7 @@ unsigned long oldTimeStabilisation = 0; // Время начала предыд�
 unsigned long periodStabilisation = 0;  // Действительное значение цикла управления
 unsigned long oldMenuTime = 0;  // Время нахождения макета неподвижно
 unsigned long start_time = 0;  // Время запуска СУД
-unsigned long duration_time = 0; // 
+unsigned long duration_time = 0; //  Длительность эксперимента по умолчанию (сек.)
 #define DEFAULT_DURATION_TIME 20; // длительность эксперимента (секунды)
 long control_value = 0; // значение управляющего воздействия для алгоритма 1
 long linearStabAngle = 0; // значение управляющего воздействия для алгоритма 2
@@ -223,7 +223,7 @@ void setup() {
   *p_is_local_mode = true; 
   *p_fix_claim_id=0;
   *p_initional_flag=0;
-  *p_duration_time=20;
+  *p_duration_time=DEFAULT_DURATION_TIME;
   *p_delta_angle_bias=65; // угол соответствует 0.65 градусам См. holding_decimals[]
   *p_index_pid=1;
   
@@ -287,7 +287,7 @@ void setup() {
 void loop() 
 {
   switch(State){
-    case READY: // Ожидание
+    case READY: // Режим подготовки к эксперименту - ожидание вертикализации
         
                                        
         SetDisplayMessage(OPTIONS);
@@ -401,7 +401,7 @@ void loop()
       {
          if (*p_fix_claim_id != 0)
          {
-            duration_time=*p_duration_time;
+            duration_time=int(*p_duration_time);
             delta_angle_bias=int(*p_delta_angle_bias*22.22/pow(10,*p_delta_angle_bias_decimals));
             index_pid=*p_index_pid;
             SetStateReady();
@@ -479,13 +479,13 @@ inline __attribute__((always_inline)) void handlerKey(char key){
           SetDisplayMessage(MENU);
           break;  
         case '4': // Переход в режим подготовки к стабилизации
-            if (is_local_mode)
-            {
-              duration_time=DEFAULT_DURATION_TIME;
-              delta_angle_bias=(int) (DEFAULT_DELTA_ANGLE*22.22);
-              SetStateReady();
-            }
-            break;
+          if (is_local_mode)
+          {
+            duration_time=DEFAULT_DURATION_TIME;
+            delta_angle_bias=(int) (DEFAULT_DELTA_ANGLE*22.22);
+            SetStateReady();
+          }
+          break;
       }
       break;
   }

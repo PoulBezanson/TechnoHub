@@ -2,7 +2,7 @@ time_options:
   name: Временные параметры
   values:
     duration_time:
-      ws_name: длительность эксперимента для местного и для slave
+      ws_name: длительность эксперимента
       ws_dimension: сек
       ws_type: integer
       ws_regexp: ^([1-9]|10)$
@@ -10,11 +10,11 @@ time_options:
       ws_control: field
       mb_dictionary: null
       mb_reg_name: holding
-      mb_reg_address: 8
+      mb_reg_address: 10
       mb_reg_type: uint16_t
       mb_decimals: 0
     start_time:
-      ws_name: время начала модельное для местного
+      ws_name: время начала модельное
       ws_dimension: сек
       ws_type: integer
       ws_regexp: ^([1-9]|10)$
@@ -26,7 +26,7 @@ time_options:
       mb_reg_type: null
       mb_decimals: 0
     delta_time:
-      ws_name: время дискретизации для местного
+      ws_name: время дискретизации
       ws_dimension: сек
       ws_type: float
       ws_regexp: null
@@ -38,7 +38,7 @@ time_options:
       mb_reg_type: null
       mb_decimals: 0
     scale_time:
-      ws_name: масштаб времени для местного
+      ws_name: масштаб времени
       ws_dimension: б/р
       ws_type: float
       ws_regexp: null
@@ -98,7 +98,7 @@ comments:
   name: Комментарии к эксперименту
   values:
     comment:
-      ws_name: Комментарий
+      ws_name: комментарий
       ws_regexp: ^(?!.*краткий\sкомментарий).*
       ws_value: краткий комментарий
       ws_control: field
